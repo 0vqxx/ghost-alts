@@ -4,7 +4,8 @@
   "description": "Premium Minecraft Accounts. Instant Delivery.",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "opennextjs-cloudflare build",
+    "next:build": "next build",
     "pages:build": "opennextjs-cloudflare build",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
