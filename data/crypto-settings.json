@@ -1,0 +1,16 @@
+[
+  {
+    "id": "crypto-ltc",
+    "symbol": "LTC",
+    "address": "",
+    "enabled": true,
+    "minConfirmations": 1
+  },
+  {
+    "id": "crypto-btc",
+    "symbol": "BTC",
+    "address": "",
+    "enabled": true,
+    "minConfirmations": 1
+  }
+]

@@ -1,0 +1,259 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String          @id @default(cuid())
+  email           String          @unique
+  username        String          @unique
+  passwordHash    String
+  role            String          @default("USER") // USER or ADMIN
+  discordId       String?
+  lastFreeClaimAt DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  orders          Order[]
+  reviews         Review[]
+  tickets         SupportTicket[]
+  freeClaims      FreeClaim[]
+  freeDrops       FreeAccountDrop[]
+}
+
+model FreeClaim {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentials String   // Masked or full credentials delivered
+  token       String?  // Minecraft session/access token
+  claimType   String   @default("DAILY") // DAILY or ADS
+  ipAddress   String?
+  claimedAt   DateTime @default(now())
+}
+
+model FreeAccountDrop {
+  id           String    @id @default(cuid())
+  email        String
+  password     String
+  token        String?   // Session / Auth token
+  skinUsername String?   @default("Steve")
+  status       String    @default("ACTIVE") // QUEUED, ACTIVE, CLAIMED, DISABLED
+  scheduledFor DateTime  @default(now())
+  claimedAt    DateTime?
+  claimedById  String?
+  claimedBy    User?     @relation(fields: [claimedById], references: [id])
+  claimType    String?   @default("DAILY") // DAILY or ADS
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Product {
+  id               String          @id @default(cuid())
+  slug             String          @unique
+  name             String
+  type             String          // "MCFA" or "NFA"
+  edition          String          // "Java", "Bedrock", "Java + Bedrock"
+  price            Float
+  compareAtPrice   Float?
+  description      String
+  beforeYouBuy     String          // Detailed limitations, change/recovery policy, region restrictions
+  features         String          // JSON array of strings
+  includedFeatures String          // JSON array of what buyer receives
+  excludedFeatures String          // JSON array of what buyer does NOT receive
+  isHypixelReady   Boolean         @default(false)
+  hasNameChange    Boolean         @default(true)
+  hasSkinChange    Boolean         @default(true)
+  hasEmailAccess   Boolean         @default(false)
+  hasCape          Boolean         @default(false)
+  isMicrosoftAccount Boolean       @default(true)
+  region           String          @default("Global")
+  deliveryType     String          @default("Instant Digital Delivery")
+  rating           Float           @default(5.0)
+  reviewCount      Int             @default(0)
+  stockCount       Int             @default(15)
+  badge            String?
+  blurName         Boolean         @default(false)
+  active           Boolean         @default(true)
+
+  // Minecraft Skin & Marketplace specific attributes
+  skinUsername     String          @default("Steve")
+  capes            String          @default("[]") // JSON array of cape names
+  rank             String?         // e.g. "MVP+", "MVP++", "VIP+"
+  hypixelLevel     Int?            @default(0)
+
+  // BEDWARS
+  bedwarsStars     Int?            @default(0)
+  bedwarsFKDR      Float?          @default(0.0)
+  bedwarsWins      Int?            @default(0)
+  bedwarsFinals    Int?            @default(0)
+
+  // SKYWARS
+  skywarsLevel     Int?            @default(0)
+  skywarsKDR       Float?          @default(0.0)
+  skywarsWins      Int?            @default(0)
+  skywarsKills     Int?            @default(0)
+
+  // DUELS
+  duelsTitle       String?         @default("None")
+  duelsWins        Int?            @default(0)
+  duelsWLR         Float?          @default(0.0)
+  duelsStreak      Int?            @default(0)
+
+  // SKYBLOCK
+  skyblockNetworth String?         @default("$0")
+  skyblockSkillAvg Float?          @default(0.0)
+  skyblockCata     Int?            @default(0)
+  skyblockCoins    String?         @default("$0")
+
+  // DONUTSMP
+  donutMoney       String?         @default("$0")
+  donutRank        String?         @default("Default")
+  donutPlaytime    String?         @default("0h")
+  donutKills       Int?            @default(0)
+  donutDeaths      Int?            @default(0)
+
+  creationYear     Int?            @default(2021)
+  emailDomain      String?         @default("Outlook.com")
+  banStatus        String?         @default("Hypixel Unbanned")
+  hypixelBanned    Boolean         @default(false)
+  donutBanned      Boolean         @default(false)
+  acceptedCryptos  String          @default("[\"LTC\",\"BTC\"]") // JSON array of accepted cryptos
+
+  orderItems       OrderItem[]
+  inventoryItems   InventoryItem[]
+  reviews          Review[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model InventoryItem {
+  id                          String      @id @default(cuid())
+  productId                   String
+  product                     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sensitiveCredentialsMasked  String      // Secure masked delivery data (e.g. GhostAlts-Secure-License-Key-XXXX)
+  status                      String      @default("AVAILABLE") // AVAILABLE, RESERVED, SOLD, DISABLED
+  orderId                     String?
+  order                       Order?      @relation(fields: [orderId], references: [id])
+  addedAt                     DateTime    @default(now())
+  soldAt                      DateTime?
+  deliveries                  Delivery[]
+}
+
+model Order {
+  id                   String          @id @default(cuid())
+  orderNumber          String          @unique
+  userId               String?
+  user                 User?           @relation(fields: [userId], references: [id])
+  discordId            String?
+  email                String
+  totalAmount          Float
+  subtotal             Float
+  discountAmount       Float           @default(0)
+  discountCode         String?
+  status               String          @default("PENDING") // PENDING, PROCESSING, DELIVERED, COMPLETED, REFUNDED, CANCELLED
+  paymentMethod        String          @default("crypto")
+  paymentId            String?
+  cryptoCurrency       String?         // "BTC" or "LTC"
+  cryptoAmountExpected Float?
+  cryptoAmountReceived Float?          @default(0)
+  receivingAddress     String?
+  txHash               String?
+  confirmations        Int?            @default(0)
+  paymentStatus        String          @default("awaiting_payment") // awaiting_payment, detected, confirming, paid, expired, underpaid, failed
+  expiresAt            DateTime?
+  paidAt               DateTime?
+  exchangeRate         Float?          // USD per crypto rate locked at checkout
+  items                OrderItem[]
+  inventoryItems       InventoryItem[]
+  deliveries           Delivery[]
+  supportTickets       SupportTicket[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+}
+
+model CryptoSetting {
+  id               String   @id @default(cuid())
+  symbol           String   @unique // "BTC" or "LTC"
+  address          String   @default("")
+  enabled          Boolean  @default(true)
+  minConfirmations Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  price     Float
+  quantity  Int      @default(1)
+}
+
+model Delivery {
+  id              String        @id @default(cuid())
+  orderId         String
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  deliveredAt     DateTime      @default(now())
+  revealedAt      DateTime?     // Security audit timestamp when buyer reveals credentials
+  ipAddress       String?
+}
+
+model SupportTicket {
+  id           String          @id @default(cuid())
+  ticketNumber String          @unique
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId      String?
+  order        Order?          @relation(fields: [orderId], references: [id])
+  category     String          // Account Issue, Delivery Issue, Payment Issue, Login Issue, Replacement Request, General Question
+  subject      String
+  message      String
+  status       String          @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  messages     TicketMessage[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model TicketMessage {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId   String
+  senderName String
+  senderRole String        // USER or ADMIN
+  message    String
+  createdAt  DateTime      @default(now())
+}
+
+model Review {
+  id                 String   @id @default(cuid())
+  productId          String
+  product            Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating             Int      @default(5)
+  title              String
+  content            String
+  isVerifiedPurchase Boolean  @default(true)
+  isDemo             Boolean  @default(false)
+  createdAt          DateTime @default(now())
+}
+
+model DiscountCode {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  percentage Float
+  active     Boolean  @default(true)
+  maxUses    Int      @default(500)
+  usedCount  Int      @default(0)
+  createdAt  DateTime @default(now())
+}
