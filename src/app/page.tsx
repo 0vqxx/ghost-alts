@@ -9,12 +9,25 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function Home() {
-  const [products, session, availableInventoryCount, soldCount] = await Promise.all([
-    getCatalog(),
-    getSession().catch(() => null),
-    db.inventoryItem.count({ where: { status: 'AVAILABLE' } }).catch(() => 0),
-    db.inventoryItem.count({ where: { status: 'SOLD' } }).catch(() => 0),
-  ]);
+  let products: any[] = [];
+  let session = null;
+  let availableInventoryCount = 0;
+  let soldCount = 0;
+
+  try {
+    const [p, s, avail, sold] = await Promise.all([
+      getCatalog().catch(() => []),
+      getSession().catch(() => null),
+      db.inventoryItem ? db.inventoryItem.count({ where: { status: 'AVAILABLE' } }).catch(() => 0) : 0,
+      db.inventoryItem ? db.inventoryItem.count({ where: { status: 'SOLD' } }).catch(() => 0) : 0,
+    ]);
+    products = p || [];
+    session = s || null;
+    availableInventoryCount = Number(avail) || 0;
+    soldCount = Number(sold) || 0;
+  } catch (err) {
+    console.error('Error fetching home page data:', err);
+  }
 
   // Prioritize NFA accounts
   const nfaProducts = products.filter((p: any) => p.type === 'NFA' && p.stockCount > 0);

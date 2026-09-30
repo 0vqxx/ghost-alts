@@ -45,7 +45,7 @@ export async function getCatalog(forceFresh = false): Promise<ProductItem[]> {
     if (products && products.length > 0) {
       const parsed = products.map((p) => ({
         ...p,
-        stockCount: p.inventoryItems.length,
+        stockCount: Array.isArray(p.inventoryItems) ? p.inventoryItems.length : 0,
         features: stringList(p.features),
         includedFeatures: stringList(p.includedFeatures),
         excludedFeatures: stringList(p.excludedFeatures),
