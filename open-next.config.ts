@@ -11,6 +11,7 @@ const config: OpenNextConfig = {
       queue: 'dummy',
     },
   },
+  // Keep crypto in node: so bcryptjs / jsonwebtoken work
   edgeExternals: ['node:crypto'],
   middleware: {
     external: true,

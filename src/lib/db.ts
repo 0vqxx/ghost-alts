@@ -1,58 +1,123 @@
-import { PrismaClient } from '@prisma/client';
+/**
+ * Cloudflare-safe Prisma client.
+ *
+ * PrismaClient must NEVER be imported at module scope on Cloudflare Workers
+ * because the query engine starts before env vars are available.
+ * This module dynamically imports Prisma only when a DB operation is actually
+ * attempted, and silently returns safe fallbacks when DATABASE_URL is absent.
+ */
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+type PrismaLike = {
+  [model: string]: {
+    findMany: (...a: any[]) => Promise<any[]>;
+    findUnique: (...a: any[]) => Promise<any | null>;
+    findFirst: (...a: any[]) => Promise<any | null>;
+    create: (...a: any[]) => Promise<any>;
+    update: (...a: any[]) => Promise<any>;
+    upsert: (...a: any[]) => Promise<any>;
+    delete: (...a: any[]) => Promise<any>;
+    count: (...a: any[]) => Promise<number>;
+    updateMany: (...a: any[]) => Promise<any>;
+    deleteMany: (...a: any[]) => Promise<any>;
+    aggregate: (...a: any[]) => Promise<any>;
+  };
 };
 
-function getPrismaClient(): PrismaClient | null {
-  if (globalForPrisma.prisma) return globalForPrisma.prisma;
+const globalForPrisma = globalThis as unknown as {
+  _prismaClient: any | undefined;
+  _prismaLoadFailed: boolean;
+};
+
+// Safe no-op client used when DATABASE_URL is missing or Prisma fails to load
+const noopModel = new Proxy(
+  {},
+  {
+    get(_t, method: string) {
+      if (method === 'count') return () => Promise.resolve(0);
+      if (method === 'findMany') return () => Promise.resolve([]);
+      if (method === 'aggregate') return () => Promise.resolve({ _count: 0 });
+      return () => Promise.resolve(null);
+    },
+  }
+);
+
+const noopClient = new Proxy(
+  {},
+  {
+    get(_t, _model: string) {
+      return noopModel;
+    },
+  }
+);
+
+async function loadPrisma(): Promise<any | null> {
+  if (globalForPrisma._prismaLoadFailed) return null;
+  if (globalForPrisma._prismaClient) return globalForPrisma._prismaClient;
+
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    console.warn('[db] DATABASE_URL not set — running in no-op DB mode');
+    globalForPrisma._prismaLoadFailed = true;
+    return null;
+  }
+
   try {
-    if (!process.env.DATABASE_URL) {
-      console.warn('DATABASE_URL is not defined in environment variables.');
-      return null;
-    }
+    // Dynamic import so the module evaluator never touches PrismaClient when env is missing
+    const { PrismaClient } = await import('@prisma/client');
     const client = new PrismaClient({
+      datasources: { db: { url } },
       log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     });
-    globalForPrisma.prisma = client;
+    globalForPrisma._prismaClient = client;
     return client;
   } catch (err) {
-    console.error('Failed to initialize PrismaClient:', err);
+    console.error('[db] Failed to initialize PrismaClient:', err);
+    globalForPrisma._prismaLoadFailed = true;
     return null;
   }
 }
 
-export const db: PrismaClient = new Proxy({} as PrismaClient, {
-  get(_target, prop) {
-    const client = getPrismaClient();
-    if (!client) {
-      // Return safe async mock functions so missing DB never crashes the worker
-      return new Proxy(
-        {},
-        {
-          get(_t, method) {
-            return () => Promise.resolve(method === 'count' ? 0 : method === 'findMany' ? [] : null);
-          },
-        }
-      );
-    }
-    const val = (client as any)[prop];
-    if (typeof val === 'function') {
-      return val.bind(client);
-    }
-    return val;
+// Async proxy — awaits Prisma lazily on each model property access
+export const db: PrismaLike = new Proxy({} as PrismaLike, {
+  get(_target, model: string) {
+    return new Proxy(
+      {},
+      {
+        get(_t, method: string) {
+          return async (...args: any[]) => {
+            const client = await loadPrisma();
+            if (!client) {
+              // Return safe fallback
+              const handler = (noopModel as any)[method];
+              return handler ? handler(...args) : Promise.resolve(null);
+            }
+            try {
+              const modelObj = (client as any)[model];
+              if (!modelObj || typeof modelObj[method] !== 'function') {
+                return method === 'count' ? 0 : method === 'findMany' ? [] : null;
+              }
+              return await modelObj[method](...args);
+            } catch (err) {
+              console.error(`[db] ${String(model)}.${String(method)} threw:`, err);
+              return method === 'count' ? 0 : method === 'findMany' ? [] : null;
+            }
+          };
+        },
+      }
+    );
   },
 });
 
 /**
- * Executes a database operation with a strict timeout to prevent slow/unreachable DB from lagging pages.
+ * Executes a database operation with a strict timeout to prevent slow/unreachable DB
+ * from lagging pages. Defaults to 3s for Cloudflare Workers (TCP over pooler is slower).
  */
 export async function withDbTimeout<T>(
   promise: Promise<T>,
   fallback: T,
-  timeoutMs = 500
+  timeoutMs = 3000
 ): Promise<T> {
-  let timer: NodeJS.Timeout;
+  let timer: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<T>((resolve) => {
     timer = setTimeout(() => resolve(fallback), timeoutMs);
   });

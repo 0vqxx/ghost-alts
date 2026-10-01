@@ -3,7 +3,8 @@ const nextConfig = {
   reactStrictMode: true,
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
-  serverExternalPackages: ['@prisma/client', '.prisma/client'],
+  // Prisma must NOT be bundled into the edge/worker bundle — it uses native binaries
+  serverExternalPackages: ['@prisma/client', '.prisma/client', 'prisma'],
   images: {
     unoptimized: true,
   },
