@@ -4,8 +4,44 @@ import { AdminOrderManager } from '@/components/admin/AdminOrderManager';
 
 export const dynamic = 'force-dynamic';
 
+type OrderItemSummary = {
+  product?: { name?: string | null; type?: string | null } | null;
+  quantity: number;
+  price: number;
+};
+
+type OrderDeliverySummary = {
+  id: string;
+  inventoryItem: { sensitiveCredentialsMasked: string };
+  deliveredAt: Date;
+};
+
+type AdminOrderRecord = {
+  id: string;
+  orderNumber: string;
+  email: string;
+  user?: { username: string } | null;
+  totalAmount: number;
+  subtotal: number;
+  discountAmount: number;
+  status: string;
+  createdAt: Date;
+  paymentMethod: string;
+  cryptoCurrency: string | null;
+  cryptoAmountExpected: number | null;
+  cryptoAmountReceived: number | null;
+  receivingAddress: string | null;
+  txHash: string | null;
+  confirmations: number | null;
+  paymentStatus: string | null;
+  paidAt: Date | null;
+  expiresAt: Date | null;
+  items: OrderItemSummary[];
+  deliveries: OrderDeliverySummary[];
+};
+
 export default async function AdminOrdersPage() {
-  const orders = await withDbTimeout(
+  const orders = await withDbTimeout<AdminOrderRecord[]>(
     db.order.findMany({
       include: {
         items: { include: { product: true } },
@@ -42,13 +78,13 @@ export default async function AdminOrdersPage() {
     paymentStatus: o.paymentStatus,
     paidAt: o.paidAt ? o.paidAt.toISOString() : null,
     expiresAt: o.expiresAt ? o.expiresAt.toISOString() : null,
-    items: o.items.map((i) => ({
+    items: o.items.map((i: OrderItemSummary) => ({
       productName: i.product?.name || 'Minecraft Account',
       productType: i.product?.type || 'MCFA',
       quantity: i.quantity,
       price: i.price,
     })),
-    deliveries: o.deliveries.map((d) => ({
+    deliveries: o.deliveries.map((d: OrderDeliverySummary) => ({
       id: d.id,
       credentials: d.inventoryItem.sensitiveCredentialsMasked,
       deliveredAt: d.deliveredAt.toISOString(),

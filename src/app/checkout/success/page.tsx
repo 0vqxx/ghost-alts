@@ -99,7 +99,7 @@ export default async function OrderSuccessPage({ searchParams }: SuccessPageProp
             Purchased Products
           </h4>
           <div className="divide-y divide-card-border">
-            {order.items.map((item) => (
+            {order.items.map((item: { id: string; product: { type: string; edition: string; name: string }; price: number; quantity: number }) => (
               <div key={item.id} className="py-3 flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">

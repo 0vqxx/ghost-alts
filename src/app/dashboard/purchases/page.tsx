@@ -26,7 +26,7 @@ export default async function DashboardPurchasesPage() {
   );
 
   const allPurchases = orders.flatMap((o) =>
-    o.deliveries.map((d) => ({
+    o.deliveries.map((d: { id: string; inventoryItem: { product: { name: string; type: string; edition: string } }; deliveredAt: Date; revealedAt: Date | null }) => ({
       deliveryId: d.id,
       orderId: o.id,
       orderNumber: o.orderNumber,

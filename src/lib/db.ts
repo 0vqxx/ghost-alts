@@ -7,20 +7,23 @@
  * attempted, and silently returns safe fallbacks when DATABASE_URL is absent.
  */
 
-type PrismaLike = {
-  [model: string]: {
-    findMany: (...a: any[]) => Promise<any[]>;
-    findUnique: (...a: any[]) => Promise<any | null>;
-    findFirst: (...a: any[]) => Promise<any | null>;
-    create: (...a: any[]) => Promise<any>;
-    update: (...a: any[]) => Promise<any>;
-    upsert: (...a: any[]) => Promise<any>;
-    delete: (...a: any[]) => Promise<any>;
-    count: (...a: any[]) => Promise<number>;
-    updateMany: (...a: any[]) => Promise<any>;
-    deleteMany: (...a: any[]) => Promise<any>;
-    aggregate: (...a: any[]) => Promise<any>;
-  };
+type PrismaModelLike = {
+  findMany: (...a: any[]) => Promise<any[]>;
+  findUnique: (...a: any[]) => Promise<any | null>;
+  findFirst: (...a: any[]) => Promise<any | null>;
+  create: (...a: any[]) => Promise<any>;
+  createMany: (...a: any[]) => Promise<{ count: number }>;
+  update: (...a: any[]) => Promise<any>;
+  upsert: (...a: any[]) => Promise<any>;
+  delete: (...a: any[]) => Promise<any>;
+  count: (...a: any[]) => Promise<number>;
+  updateMany: (...a: any[]) => Promise<any>;
+  deleteMany: (...a: any[]) => Promise<any>;
+  aggregate: (...a: any[]) => Promise<any>;
+};
+
+type PrismaLike = Record<string, PrismaModelLike> & {
+  $transaction: PrismaModelLike & ((callback: (tx: any) => Promise<any>, options?: any) => Promise<any>);
 };
 
 const globalForPrisma = globalThis as unknown as {
@@ -34,6 +37,7 @@ const noopModel = new Proxy(
   {
     get(_t, method: string) {
       if (method === 'count') return () => Promise.resolve(0);
+      if (method === 'createMany') return () => Promise.resolve({ count: 0 });
       if (method === 'findMany') return () => Promise.resolve([]);
       if (method === 'aggregate') return () => Promise.resolve({ _count: 0 });
       return () => Promise.resolve(null);
@@ -80,6 +84,14 @@ async function loadPrisma(): Promise<any | null> {
 // Async proxy — awaits Prisma lazily on each model property access
 export const db: PrismaLike = new Proxy({} as PrismaLike, {
   get(_target, model: string) {
+    if (model === '$transaction') {
+      return async (callback: (tx: any) => Promise<any>, options?: any) => {
+        const client = await loadPrisma();
+        if (!client) return callback(noopClient);
+        return client.$transaction(callback, options);
+      };
+    }
+
     return new Proxy(
       {},
       {

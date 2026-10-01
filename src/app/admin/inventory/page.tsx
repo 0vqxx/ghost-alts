@@ -1,6 +1,7 @@
 import React from 'react';
 import { db } from '@/lib/db';
 import { AdminInventoryManager } from '@/components/admin/AdminInventoryManager';
+import type { AdminInventoryRecord } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,7 @@ export default async function AdminInventoryPage() {
       .catch(() => []),
   ]);
 
-  const formattedInventory = inventory.map((i) => ({
+  const formattedInventory = inventory.map((i: AdminInventoryRecord) => ({
     id: i.id,
     productId: i.productId,
     productName: i.product?.name || 'Unknown Product',

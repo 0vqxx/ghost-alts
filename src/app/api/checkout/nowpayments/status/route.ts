@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
       orderNumber: order.orderNumber,
       status: liveStatus,
       isDelivered: liveStatus === 'DELIVERED' || liveStatus === 'COMPLETED',
-      deliveries: (freshOrder?.deliveries || []).map((d) => ({
+      deliveries: (freshOrder?.deliveries || []).map((d: { id: string; inventoryItem?: { sensitiveCredentialsMasked?: string } | null }) => ({
         id: d.id,
         credentials: d.inventoryItem?.sensitiveCredentialsMasked,
       })),

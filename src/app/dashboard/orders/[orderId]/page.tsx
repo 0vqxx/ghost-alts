@@ -58,7 +58,7 @@ export default async function OrderDeliveryPage({ params }: OrderDeliveryPagePro
     );
   }
 
-  const formattedDeliveries = order.deliveries.map((d) => ({
+  const formattedDeliveries = order.deliveries.map((d: { id: string; inventoryItem: { product: { name: string; type: string; edition: string } }; deliveredAt: Date; revealedAt: Date | null }) => ({
     id: d.id,
     productName: d.inventoryItem.product.name,
     productType: d.inventoryItem.product.type,

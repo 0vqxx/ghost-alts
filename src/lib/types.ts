@@ -85,6 +85,17 @@ export interface CryptoSettingItem {
   updatedAt?: string | Date;
 }
 
+export interface AdminInventoryRecord {
+  id: string;
+  productId: string;
+  status: string;
+  addedAt: Date;
+  soldAt: Date | null;
+  sensitiveCredentialsMasked: string;
+  product?: { name?: string | null; type?: string | null; edition?: string | null } | null;
+  order?: { orderNumber?: string | null } | null;
+}
+
 export interface CartItem {
   product: ProductItem;
   quantity: number;

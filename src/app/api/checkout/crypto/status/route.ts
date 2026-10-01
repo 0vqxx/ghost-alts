@@ -6,6 +6,12 @@ import { sendDiscordDeliveryMessage } from '@/lib/discordBot';
 
 export const dynamic = 'force-dynamic';
 
+type CryptoOrderDelivery = {
+  id: string;
+  inventoryItem: { sensitiveCredentialsMasked: string };
+  deliveredAt: Date;
+};
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -43,7 +49,7 @@ export async function GET(request: Request) {
 
     // 1. If already delivered / paid
     if (order.status === 'DELIVERED' || order.paymentStatus === 'paid') {
-      const deliveries = order.deliveries.map((d) => ({
+      const deliveries = order.deliveries.map((d: CryptoOrderDelivery) => ({
         id: d.id,
         credentials: d.inventoryItem.sensitiveCredentialsMasked,
         deliveredAt: d.deliveredAt,
@@ -200,7 +206,7 @@ export async function GET(request: Request) {
             discordUserId: order.discordId,
             orderNumber: order.orderNumber,
             productName: firstItem?.product?.name || 'Minecraft Account',
-            quantity: order.items.reduce((sum, i) => sum + i.quantity, 0),
+            quantity: order.items.reduce((sum: number, i: { quantity: number }) => sum + i.quantity, 0),
             email: order.email,
             password: credentialsStr,
             deliveredAt: new Date(),

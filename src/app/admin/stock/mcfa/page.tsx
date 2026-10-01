@@ -1,6 +1,7 @@
 import React from 'react';
 import { db } from '@/lib/db';
 import { AdminTierStockManager } from '@/components/admin/AdminTierStockManager';
+import type { AdminInventoryRecord } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +39,7 @@ export default async function AdminMCFAStockPage() {
       .catch(() => []),
   ]);
 
-  const formattedInventory = inventory.map((i) => ({
+  const formattedInventory = inventory.map((i: AdminInventoryRecord) => ({
     id: i.id,
     productId: i.productId,
     productName: i.product?.name || 'MCFA Account',

@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     }
 
     // Format credentials securely for client
-    const revealedAccounts = order.deliveries.map((d) => {
+    const revealedAccounts = order.deliveries.map((d: { id: string; inventoryItem: { product: { id: string; name: string; type: string; edition: string }; sensitiveCredentialsMasked: string } }) => {
       const p = d.inventoryItem.product;
       const formatted = formatPurchaseDelivery(
         p.name,

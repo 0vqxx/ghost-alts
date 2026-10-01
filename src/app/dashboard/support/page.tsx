@@ -99,7 +99,7 @@ export default async function DashboardSupportPage() {
 
               {/* Messages thread preview */}
               <div className="space-y-3">
-                {t.messages.map((m) => (
+                {t.messages.map((m: { id: string; senderRole: string; senderName: string; createdAt: Date; message: string }) => (
                   <div
                     key={m.id}
                     className={`p-3.5 rounded-xl text-xs space-y-1 font-mono ${
