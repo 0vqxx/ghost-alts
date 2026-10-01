@@ -3,6 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
+  serverExternalPackages: ['@prisma/client', '.prisma/client'],
   images: {
     unoptimized: true,
   },
