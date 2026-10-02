@@ -20,6 +20,11 @@ export function getAdminDiscordIds(): string[] {
 export const ALLOWED_ADMIN_DISCORD_IDS = getAdminDiscordIds();
 
 export function getDiscordRedirectUri(requestOrigin: string): string {
+  // A local .env override must never send production OAuth back to localhost.
+  if (process.env.NODE_ENV === 'production') {
+    return `${requestOrigin.replace(/\/$/, '')}/auth/callback`;
+  }
+
   if (process.env.DISCORD_REDIRECT_URI) {
     return process.env.DISCORD_REDIRECT_URI.trim();
   }
