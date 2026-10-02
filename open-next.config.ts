@@ -11,7 +11,7 @@ const config: OpenNextConfig = {
       queue: 'dummy',
     },
   },
-  // Keep crypto in node: so bcryptjs / jsonwebtoken work
+  // Next.js uses node:crypto at runtime; keep it native to workerd.
   edgeExternals: ['node:crypto'],
   middleware: {
     external: true,

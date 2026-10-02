@@ -34,51 +34,28 @@ try {
     try {
       const fs = await import('node:fs');
       const path = await import('node:path');
-      const esbuild = await import('esbuild');
-      const { builtinModules } = await import('node:module');
 
       const workerFile = path.join(process.cwd(), '.open-next', 'worker.js');
       if (fs.existsSync(workerFile)) {
-        // Bundle the worker into a single self-contained file for Cloudflare Pages
-        const externals = [
-          ...builtinModules,
-          ...builtinModules.map(m => 'node:' + m),
-          'cloudflare:*',
-          'cloudflare',
-          // Prisma must NOT be bundled — it uses native binaries incompatible with Workers
-          '@prisma/client',
-          '.prisma/client',
-          '.prisma',
-        ];
-
-        await esbuild.build({
-          entryPoints: ['.open-next/worker.js'],
-          bundle: true,
-          outfile: '.open-next/assets/_worker.js',
-          format: 'esm',
-          target: 'es2022',
-          platform: 'node',
-          external: externals,
-          mainFields: ['module', 'main'],
-          logLevel: 'warning',
-          // Wrap entire worker in try/catch so crashes show 500 instead of 1101
-          banner: {
-            js: [
-              '// GhostAlts _worker.js — bundled by patch-opennext.js',
-            ].join('\\n'),
-          },
-        });
-        console.log('✓ Bundled .open-next/assets/_worker.js for Cloudflare Pages');
+        const assetsDir = path.join(process.cwd(), '.open-next', 'assets');
+        fs.copyFileSync(workerFile, path.join(assetsDir, '_worker.js'));
+        for (const directory of ['cloudflare', 'middleware', 'server-functions', '.build']) {
+          const source = path.join(process.cwd(), '.open-next', directory);
+          if (fs.existsSync(source)) {
+            fs.cpSync(source, path.join(assetsDir, directory), { recursive: true, force: true });
+          }
+        }
+        console.log('✓ Prepared OpenNext modules for Cloudflare Pages');
       } else {
-        console.warn('⚠ .open-next/worker.js not found — skipping _worker.js bundling');
+        console.warn('⚠ .open-next/worker.js not found — skipping Pages Worker preparation');
       }
     } catch (err) {
-      console.error('Error bundling _worker.js:', err);
+      console.error('Error preparing Pages Worker modules:', err);
     }
     // --- End injected code ---
 `;
       fs.writeFileSync(buildPath, before + bundleCode + cleanAfter);
-      console.log('✓ Patched build.js to bundle _worker.js');
+      console.log('✓ Patched build.js to prepare Pages Worker modules');
     } else {
       console.log('ℹ build.js patch already applied or sentinel not found — skipping');
     }
