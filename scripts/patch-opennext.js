@@ -38,7 +38,14 @@ try {
       const workerFile = path.join(process.cwd(), '.open-next', 'worker.js');
       if (fs.existsSync(workerFile)) {
         const assetsDir = path.join(process.cwd(), '.open-next', 'assets');
-        fs.copyFileSync(workerFile, path.join(assetsDir, '_worker.js'));
+        let worker = fs.readFileSync(workerFile, 'utf8');
+        const requestMarker = '            const response = maybeGetSkewProtectionResponse(request);';
+        const pagesAssetMode = '            // Pages advanced mode sends requests through this worker before static assets.\\n' +
+          '            globalThis.__ASSETS_RUN_WORKER_FIRST__ = true;\\n' + requestMarker;
+        if (worker.includes(requestMarker) && !worker.includes('__ASSETS_RUN_WORKER_FIRST__ = true')) {
+          worker = worker.replace(requestMarker, pagesAssetMode);
+        }
+        fs.writeFileSync(path.join(assetsDir, '_worker.js'), worker);
         for (const directory of ['cloudflare', 'middleware', 'server-functions', '.build']) {
           const source = path.join(process.cwd(), '.open-next', directory);
           if (fs.existsSync(source)) {
