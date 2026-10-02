@@ -1,17 +1,10 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GhostLogo } from '@/components/ui/GhostLogo';
-import {
-  AlertCircle,
-  ShieldCheck,
-  Zap,
-  ArrowRight,
-  Sparkles,
-  Lock,
-} from 'lucide-react';
+import { AlertCircle, ShieldCheck, ArrowRight } from 'lucide-react';
 
 function LoginContent() {
   const router = useRouter();
@@ -20,39 +13,12 @@ function LoginContent() {
   const urlError = searchParams.get('error');
 
   const [loading, setLoading] = useState(false);
-  const [devLoading, setDevLoading] = useState(false);
   const [error, setError] = useState(urlError || '');
 
   const handleDiscordSignIn = () => {
     setError('');
     setLoading(true);
     window.location.href = `/api/auth/discord?next=${encodeURIComponent(redirectUrl)}`;
-  };
-
-  const handleQuickAdminLogin = async () => {
-    setError('');
-    setDevLoading(true);
-    try {
-      const res = await fetch('/api/auth/dev-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          discordId: '722126662241746964',
-          username: 'GhostAdmin',
-          next: redirectUrl === '/dashboard' ? '/admin' : redirectUrl,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Quick login failed');
-      }
-
-      window.location.href = data.redirect || '/admin';
-    } catch (err: any) {
-      setError(err.message || 'Quick login failed');
-      setDevLoading(false);
-    }
   };
 
   return (
@@ -103,7 +69,7 @@ function LoginContent() {
         <button
           type="button"
           onClick={handleDiscordSignIn}
-          disabled={loading || devLoading}
+          disabled={loading}
           className="w-full flex items-center justify-center gap-3 py-4 px-6 bg-[#5865F2] hover:bg-[#4752C4] active:scale-[0.98] text-white text-sm font-bold font-mono rounded-2xl transition-all shadow-md shadow-[#5865F2]/25 disabled:opacity-50 cursor-pointer"
         >
           {loading ? (
@@ -121,28 +87,6 @@ function LoginContent() {
             </>
           )}
         </button>
-
-        {/* Quick Dev Admin Login for Localhost */}
-        <div className="pt-2 border-t border-card-border/60">
-          <button
-            type="button"
-            onClick={handleQuickAdminLogin}
-            disabled={loading || devLoading}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-surface hover:bg-soft border border-card-border hover:border-purple-500/50 text-secondary hover:text-primary text-xs font-semibold rounded-xl transition-all cursor-pointer"
-          >
-            {devLoading ? (
-              <span className="flex items-center gap-2">
-                <span className="w-3.5 h-3.5 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
-                Authorizing Admin Session...
-              </span>
-            ) : (
-              <>
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>Quick Sign In as Whitelisted Admin (Dev / Localhost)</span>
-              </>
-            )}
-          </button>
-        </div>
 
         <div className="pt-2 border-t border-card-border flex items-center justify-between text-[11px] text-secondary">
           <span className="flex items-center gap-1.5">
