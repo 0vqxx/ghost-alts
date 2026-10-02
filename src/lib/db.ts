@@ -66,10 +66,17 @@ async function loadPrisma(): Promise<any | null> {
   }
 
   try {
-    // Dynamic import so the module evaluator never touches PrismaClient when env is missing
-    const { PrismaClient } = await import('@prisma/client');
+    // Cloudflare Workers need Prisma's JS driver adapter; the default Prisma
+    // query engine cannot open PostgreSQL sockets in the Worker runtime.
+    const [{ PrismaClient }, { PrismaPg }, { Pool }] = await Promise.all([
+      import('@prisma/client'),
+      import('@prisma/adapter-pg'),
+      import('pg'),
+    ]);
+    const pool = new Pool({ connectionString: url, max: 1 });
+    const adapter = new PrismaPg(pool);
     const client = new PrismaClient({
-      datasources: { db: { url } },
+      adapter,
       log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     });
     globalForPrisma._prismaClient = client;
