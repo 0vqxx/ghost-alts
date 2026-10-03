@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ArrowRight, Zap, ShieldCheck, Coins } from 'lucide-react';
 import { getCatalog } from '@/lib/catalog';
 import { getSession } from '@/lib/auth';
-import { db } from '@/lib/db';
+import { db, withDbTimeout } from '@/lib/db';
 import { ProductCard } from '@/components/store/ProductCard';
 
 export const dynamic = 'force-dynamic';
@@ -16,10 +16,10 @@ export default async function Home() {
 
   try {
     const [p, s, avail, sold] = await Promise.all([
-      getCatalog().catch(() => []),
+      withDbTimeout(getCatalog(), [], 2500),
       getSession().catch(() => null),
-      db.inventoryItem ? db.inventoryItem.count({ where: { status: 'AVAILABLE' } }).catch(() => 0) : 0,
-      db.inventoryItem ? db.inventoryItem.count({ where: { status: 'SOLD' } }).catch(() => 0) : 0,
+      withDbTimeout(db.inventoryItem.count({ where: { status: 'AVAILABLE' } }), 0, 2500),
+      withDbTimeout(db.inventoryItem.count({ where: { status: 'SOLD' } }), 0, 2500),
     ]);
     products = p || [];
     session = s || null;

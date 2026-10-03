@@ -28,6 +28,7 @@ type PrismaLike = Record<string, PrismaModelLike> & {
 
 const globalForPrisma = globalThis as unknown as {
   _prismaClient: any | undefined;
+  _prismaLoadPromise: Promise<any | null> | undefined;
   _prismaLoadFailed: boolean;
 };
 
@@ -54,38 +55,48 @@ const noopClient = new Proxy(
   }
 );
 
-async function loadPrisma(): Promise<any | null> {
-  if (globalForPrisma._prismaLoadFailed) return null;
-  if (globalForPrisma._prismaClient) return globalForPrisma._prismaClient;
+function loadPrisma(): Promise<any | null> {
+  if (globalForPrisma._prismaLoadFailed) return Promise.resolve(null);
+  if (globalForPrisma._prismaClient) return Promise.resolve(globalForPrisma._prismaClient);
+  if (globalForPrisma._prismaLoadPromise) return globalForPrisma._prismaLoadPromise;
 
   const url = process.env.DATABASE_URL;
   if (!url) {
     console.warn('[db] DATABASE_URL not set — running in no-op DB mode');
     globalForPrisma._prismaLoadFailed = true;
-    return null;
+    return Promise.resolve(null);
   }
 
-  try {
-    // Cloudflare Workers need Prisma's JS driver adapter; the default Prisma
-    // query engine cannot open PostgreSQL sockets in the Worker runtime.
-    const [{ PrismaClient }, { PrismaPg }, { Pool }] = await Promise.all([
-      import('@prisma/client'),
-      import('@prisma/adapter-pg'),
-      import('pg'),
-    ]);
-    const pool = new Pool({ connectionString: url, max: 1 });
-    const adapter = new PrismaPg(pool);
-    const client = new PrismaClient({
-      adapter,
-      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-    });
-    globalForPrisma._prismaClient = client;
-    return client;
-  } catch (err) {
-    console.error('[db] Failed to initialize PrismaClient:', err);
-    globalForPrisma._prismaLoadFailed = true;
-    return null;
-  }
+  // Concurrent page queries must share one pool and one Prisma client.
+  globalForPrisma._prismaLoadPromise = (async () => {
+    try {
+      // Cloudflare Workers need Prisma's JS driver adapter; the default Prisma
+      // query engine cannot open PostgreSQL sockets in the Worker runtime.
+      const [{ PrismaClient }, { PrismaPg }, { Pool }] = await Promise.all([
+        import('@prisma/client'),
+        import('@prisma/adapter-pg'),
+        import('pg'),
+      ]);
+      const pool = new Pool({
+        connectionString: url,
+        max: 1,
+        maxUses: 1,
+        connectionTimeoutMillis: 2000,
+      });
+      const adapter = new PrismaPg(pool);
+      const client = new PrismaClient({
+        adapter,
+        log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+      });
+      globalForPrisma._prismaClient = client;
+      return client;
+    } catch (err) {
+      console.error('[db] Failed to initialize PrismaClient:', err);
+      globalForPrisma._prismaLoadFailed = true;
+      return null;
+    }
+  })();
+  return globalForPrisma._prismaLoadPromise;
 }
 
 // Async proxy — awaits Prisma lazily on each model property access

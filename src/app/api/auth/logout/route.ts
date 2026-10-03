@@ -1,8 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_COOKIE_NAME } from '@/lib/auth';
 
-export async function POST() {
-  const response = NextResponse.json({ success: true });
+function clearSession(response: NextResponse) {
   response.cookies.set({
     name: AUTH_COOKIE_NAME,
     value: '',
@@ -11,4 +10,12 @@ export async function POST() {
     path: '/',
   });
   return response;
+}
+
+export async function GET(request: NextRequest) {
+  return clearSession(NextResponse.redirect(new URL('/', request.url)));
+}
+
+export async function POST() {
+  return clearSession(NextResponse.json({ success: true }));
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { db } from '@/lib/db';
+import { db, withDbTimeout } from '@/lib/db';
 import { formatPrice, formatDate } from '@/lib/utils';
 import {
   DollarSign,
@@ -18,26 +18,24 @@ import {
 export const dynamic = 'force-dynamic';
 
 export default async function AdminOverviewPage() {
+  const readOrEmpty = <T,>(query: Promise<T[]>): Promise<T[]> =>
+    withDbTimeout(query, [] as T[], 2500);
   const [orders, products, users, inventory, drops, tickets] = await Promise.all([
-    db.order
-      .findMany({
+    readOrEmpty(db.order.findMany({
         include: {
           items: { include: { product: true } },
         },
         orderBy: { createdAt: 'desc' },
-      })
-      .catch(() => []),
-    db.product
-      .findMany({
+      })),
+    readOrEmpty(db.product.findMany({
         include: {
           inventoryItems: true,
         },
-      })
-      .catch(() => []),
-    db.user.findMany().catch(() => []),
-    db.inventoryItem.findMany().catch(() => []),
-    db.freeAccountDrop.findMany().catch(() => []),
-    db.supportTicket.findMany({ where: { status: 'OPEN' } }).catch(() => []),
+      })),
+    readOrEmpty(db.user.findMany()),
+    readOrEmpty(db.inventoryItem.findMany()),
+    readOrEmpty(db.freeAccountDrop.findMany()),
+    readOrEmpty(db.supportTicket.findMany({ where: { status: 'OPEN' } })),
   ]);
 
   const totalRevenue = orders.reduce((sum, o) => sum + o.totalAmount, 0);
