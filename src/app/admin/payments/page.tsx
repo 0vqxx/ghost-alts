@@ -17,7 +17,7 @@ import {
 
 interface CryptoSetting {
   id?: string;
-  symbol: 'BTC' | 'LTC';
+  symbol: string;
   name: string;
   icon: string;
   address: string;
@@ -31,14 +31,6 @@ export default function AdminPaymentsPage() {
       symbol: 'LTC',
       name: 'Litecoin',
       icon: 'Ł',
-      address: '',
-      enabled: true,
-      minConfirmations: 1,
-    },
-    {
-      symbol: 'BTC',
-      name: 'Bitcoin',
-      icon: '₿',
       address: '',
       enabled: true,
       minConfirmations: 1,
@@ -60,21 +52,20 @@ export default function AdminPaymentsPage() {
       }
       const data = await res.json();
       if (Array.isArray(data.settings)) {
-        setSettings((prev) =>
-          prev.map((s) => {
-            const found = data.settings.find((item: any) => item.symbol === s.symbol);
-            if (found) {
-              return {
-                ...s,
-                id: found.id,
-                address: found.address || '',
-                enabled: found.enabled ?? true,
-                minConfirmations: found.minConfirmations || 1,
-              };
-            }
-            return s;
-          })
-        );
+        const ltcFound = data.settings.find((item: any) => item.symbol === 'LTC');
+        if (ltcFound) {
+          setSettings([
+            {
+              symbol: 'LTC',
+              name: 'Litecoin',
+              icon: 'Ł',
+              id: ltcFound.id,
+              address: ltcFound.address || '',
+              enabled: ltcFound.enabled ?? true,
+              minConfirmations: ltcFound.minConfirmations || 1,
+            },
+          ]);
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Error fetching payment settings');
@@ -114,7 +105,7 @@ export default function AdminPaymentsPage() {
         throw new Error(data.error || 'Failed to save settings');
       }
 
-      setSuccess('Cryptocurrency wallet settings updated successfully!');
+      setSuccess('Litecoin wallet settings updated successfully!');
       setTimeout(() => setSuccess(''), 4000);
     } catch (err: any) {
       setError(err.message || 'Error saving settings');
@@ -123,7 +114,7 @@ export default function AdminPaymentsPage() {
     }
   };
 
-  const updateSetting = (symbol: 'BTC' | 'LTC', field: keyof CryptoSetting, value: any) => {
+  const updateSetting = (symbol: string, field: keyof CryptoSetting, value: any) => {
     setSettings((prev) =>
       prev.map((item) => (item.symbol === symbol ? { ...item, [field]: value } : item))
     );
@@ -138,7 +129,7 @@ export default function AdminPaymentsPage() {
             Crypto Wallets
           </h1>
           <p className="text-xs text-white/50 mt-0.5">
-            Configure direct on-chain receiving addresses for Litecoin (LTC) and Bitcoin (BTC).
+            Configure direct on-chain receiving address for Litecoin (LTC).
           </p>
         </div>
         <button

@@ -124,7 +124,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
     setRank('None');
 
     setSelectedCapes([]);
-    setAcceptedCryptos(['LTC', 'BTC']);
+    setAcceptedCryptos(['LTC']);
     setHypixelBanned(false);
     setDonutBanned(false);
     setEmailDomain('None (NFA)');
@@ -147,7 +147,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
 
     const capes = Array.isArray(p.capes) ? p.capes : [];
     setSelectedCapes(capes);
-    setAcceptedCryptos(Array.isArray(p.acceptedCryptos) ? p.acceptedCryptos : ['LTC', 'BTC']);
+    setAcceptedCryptos(Array.isArray(p.acceptedCryptos) && p.acceptedCryptos.length > 0 ? p.acceptedCryptos : ['LTC']);
     setHypixelBanned(Boolean(p.hypixelBanned));
     setDonutBanned(Boolean(p.donutBanned));
     setEmailDomain(p.emailDomain || 'None (NFA)');
@@ -1000,16 +1000,14 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                 <label className="text-[11px] font-semibold text-white/60 uppercase block">
                   Accepted Cryptocurrencies for this Product
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3">
                   <label className="flex items-center gap-2.5 p-2 rounded-lg bg-[#0b0e14] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-colors">
                     <input
                       type="checkbox"
                       checked={acceptedCryptos.includes('LTC')}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setAcceptedCryptos((prev) => [...prev, 'LTC']);
-                        } else {
-                          setAcceptedCryptos((prev) => prev.filter((c) => c !== 'LTC'));
+                          setAcceptedCryptos(['LTC']);
                         }
                       }}
                       className="rounded border-white/20 text-[#5a61e2] focus:ring-0 w-4 h-4 cursor-pointer"
@@ -1018,28 +1016,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                       <span className="text-xs font-semibold text-white flex items-center gap-1.5">
                         <span className="text-[#4e88e7] font-bold">Ł</span> Litecoin (LTC)
                       </span>
-                      <span className="text-[10px] text-white/40">Low-fee on-chain payment</span>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center gap-2.5 p-2 rounded-lg bg-[#0b0e14] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={acceptedCryptos.includes('BTC')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setAcceptedCryptos((prev) => [...prev, 'BTC']);
-                        } else {
-                          setAcceptedCryptos((prev) => prev.filter((c) => c !== 'BTC'));
-                        }
-                      }}
-                      className="rounded border-white/20 text-[#5a61e2] focus:ring-0 w-4 h-4 cursor-pointer"
-                    />
-                    <div>
-                      <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                        <span className="text-[#f7931a] font-bold">₿</span> Bitcoin (BTC)
-                      </span>
-                      <span className="text-[10px] text-white/40">Standard Bitcoin network</span>
+                      <span className="text-[10px] text-white/40">Low-fee on-chain instant settlement</span>
                     </div>
                   </label>
                 </div>
