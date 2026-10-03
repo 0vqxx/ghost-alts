@@ -48,6 +48,7 @@ export default function FreeNfaPage() {
     credentials: string;
     token?: string | null;
     claimType?: string;
+    isTokenOnly?: boolean;
   } | null>(null);
 
   const [activeTab, setActiveTab] = useState<'combo' | 'token' | 'full'>('combo');
@@ -168,11 +169,17 @@ export default function FreeNfaPage() {
         throw new Error(data.error || 'Failed to claim account');
       }
 
+      const isToken = Boolean(data.isTokenOnly) || (!data.credentials.includes(':') && Boolean(data.token));
       setNewlyClaimed({
         credentials: data.credentials,
         token: data.token,
         claimType: data.claimType,
+        isTokenOnly: isToken,
       });
+
+      if (isToken) {
+        setActiveTab('token');
+      }
 
       const remainingStock = Math.max(0, activeDropCount - 1);
       setActiveDropCount(remainingStock);

@@ -17,13 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No items in checkout payload' }, { status: 400 });
     }
 
-    const selectedCrypto = (cryptoCurrency || 'LTC').toUpperCase() as 'BTC' | 'LTC';
-    if (!['BTC', 'LTC'].includes(selectedCrypto)) {
-      return NextResponse.json(
-        { error: 'Invalid crypto currency. Must be BTC or LTC.' },
-        { status: 400 }
-      );
-    }
+    const selectedCrypto = 'LTC';
 
     // 1. Check Global Crypto Settings
     const cryptoSetting = await getCryptoSettingBySymbol(selectedCrypto);

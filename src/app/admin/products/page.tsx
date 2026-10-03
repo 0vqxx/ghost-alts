@@ -11,16 +11,27 @@ export default async function AdminProductsPage() {
       orderBy: { createdAt: 'desc' },
     }),
     [],
-    400
+    3000
   );
+
+  const safeJson = (val: any, fallback: any = []) => {
+    if (!val) return fallback;
+    if (Array.isArray(val)) return val;
+    try {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  };
 
   const parsedProducts: ProductItem[] = products.map((p) => ({
     ...p,
-    features: JSON.parse(p.features || '[]') as string[],
-    includedFeatures: JSON.parse(p.includedFeatures || '[]') as string[],
-    excludedFeatures: JSON.parse(p.excludedFeatures || '[]') as string[],
-    capes: JSON.parse(p.capes || '[]') as string[],
-    acceptedCryptos: JSON.parse(p.acceptedCryptos || '["LTC", "BTC"]') as string[],
+    features: safeJson(p.features),
+    includedFeatures: safeJson(p.includedFeatures),
+    excludedFeatures: safeJson(p.excludedFeatures),
+    capes: safeJson(p.capes),
+    acceptedCryptos: safeJson(p.acceptedCryptos, ['LTC']),
   }));
 
   return (

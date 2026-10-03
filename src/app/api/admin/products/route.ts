@@ -167,7 +167,7 @@ export async function POST(request: Request) {
           ? (typeof body.acceptedCryptos === 'string'
               ? body.acceptedCryptos
               : JSON.stringify(body.acceptedCryptos))
-          : '["LTC","BTC"]',
+          : '["LTC"]',
       },
     });
 

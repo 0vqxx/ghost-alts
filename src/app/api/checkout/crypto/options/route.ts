@@ -23,15 +23,6 @@ export async function GET() {
         priceUsd: ltcPrice,
         minConfirmations: ltcSetting?.minConfirmations || 1,
       },
-      {
-        symbol: 'BTC',
-        name: 'Bitcoin',
-        icon: '₿',
-        enabled: Boolean(btcSetting?.enabled && btcSetting?.address?.trim()),
-        addressConfigured: Boolean(btcSetting?.address?.trim()),
-        priceUsd: btcPrice,
-        minConfirmations: btcSetting?.minConfirmations || 1,
-      },
     ];
 
     return NextResponse.json({ options });

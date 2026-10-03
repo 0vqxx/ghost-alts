@@ -37,6 +37,18 @@ const AVAILABLE_CAPES = [
   'TikTok Cape',
 ];
 
+function safeJsonArray(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  return [];
+}
+
 export function AdminProductManager({ initialProducts }: { initialProducts: ProductItem[] }) {
   const [products, setProducts] = useState(initialProducts);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -206,14 +218,16 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to list product');
+        if (!res.ok || !data?.product) {
+          throw new Error(data?.error || 'Failed to list product');
+        }
 
         const formatted = {
           ...data.product,
-          features: JSON.parse(data.product.features || '[]'),
-          includedFeatures: JSON.parse(data.product.includedFeatures || '[]'),
-          excludedFeatures: JSON.parse(data.product.excludedFeatures || '[]'),
-          capes: JSON.parse(data.product.capes || '[]'),
+          features: safeJsonArray(data.product.features),
+          includedFeatures: safeJsonArray(data.product.includedFeatures),
+          excludedFeatures: safeJsonArray(data.product.excludedFeatures),
+          capes: safeJsonArray(data.product.capes),
         };
 
         setProducts((prev) => [formatted, ...prev]);
@@ -267,14 +281,16 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to list batch products');
+        if (!res.ok || !Array.isArray(data?.products)) {
+          throw new Error(data?.error || 'Failed to list batch products');
+        }
 
         const formatted = data.products.map((p: any) => ({
           ...p,
-          features: JSON.parse(p.features || '[]'),
-          includedFeatures: JSON.parse(p.includedFeatures || '[]'),
-          excludedFeatures: JSON.parse(p.excludedFeatures || '[]'),
-          capes: JSON.parse(p.capes || '[]'),
+          features: safeJsonArray(p.features),
+          includedFeatures: safeJsonArray(p.includedFeatures),
+          excludedFeatures: safeJsonArray(p.excludedFeatures),
+          capes: safeJsonArray(p.capes),
         }));
 
         setProducts((prev) => [...formatted, ...prev]);
@@ -326,8 +342,8 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to save product');
+      if (!res.ok || !data?.product) {
+        throw new Error(data?.error || 'Failed to save product');
       }
 
       if (isEdit) {
@@ -337,10 +353,10 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
               ? {
                   ...p,
                   ...data.product,
-                  features: JSON.parse(data.product.features || '[]'),
-                  includedFeatures: JSON.parse(data.product.includedFeatures || '[]'),
-                  excludedFeatures: JSON.parse(data.product.excludedFeatures || '[]'),
-                  capes: JSON.parse(data.product.capes || '[]'),
+                  features: safeJsonArray(data.product.features),
+                  includedFeatures: safeJsonArray(data.product.includedFeatures),
+                  excludedFeatures: safeJsonArray(data.product.excludedFeatures),
+                  capes: safeJsonArray(data.product.capes),
                 }
               : p
           )
@@ -349,10 +365,10 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
       } else {
         const formatted = {
           ...data.product,
-          features: JSON.parse(data.product.features || '[]'),
-          includedFeatures: JSON.parse(data.product.includedFeatures || '[]'),
-          excludedFeatures: JSON.parse(data.product.excludedFeatures || '[]'),
-          capes: JSON.parse(data.product.capes || '[]'),
+          features: safeJsonArray(data.product.features),
+          includedFeatures: safeJsonArray(data.product.includedFeatures),
+          excludedFeatures: safeJsonArray(data.product.excludedFeatures),
+          capes: safeJsonArray(data.product.capes),
         };
         setProducts((prev) => [formatted, ...prev]);
         setSuccessMsg(`Draft created for "${data.product.name}". Upload real stock, then activate it.`);
@@ -417,16 +433,16 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to bulk upload accounts');
+      if (!res.ok || !Array.isArray(data?.products)) {
+        throw new Error(data?.error || 'Failed to bulk upload accounts');
       }
 
       const formatted = data.products.map((p: any) => ({
         ...p,
-        features: JSON.parse(p.features || '[]'),
-        includedFeatures: JSON.parse(p.includedFeatures || '[]'),
-        excludedFeatures: JSON.parse(p.excludedFeatures || '[]'),
-        capes: JSON.parse(p.capes || '[]'),
+        features: safeJsonArray(p.features),
+        includedFeatures: safeJsonArray(p.includedFeatures),
+        excludedFeatures: safeJsonArray(p.excludedFeatures),
+        capes: safeJsonArray(p.capes),
       }));
 
       setProducts((prev) => [...formatted, ...prev]);

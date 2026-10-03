@@ -20,7 +20,7 @@ export default async function AdminInventoryPage() {
     db.product
       .findMany({
         select: { id: true, name: true, type: true, edition: true },
-        where: { active: true },
+        orderBy: { createdAt: 'desc' },
       })
       .catch(() => []),
   ]);

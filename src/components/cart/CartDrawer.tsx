@@ -152,7 +152,7 @@ export function CartDrawer() {
               <span className="flex items-center gap-1 text-emerald-400">
                 <Zap size={12} className="text-amber-400" /> Instant Crypto Fulfillment
               </span>
-              <span>LTC / BTC / USDT</span>
+              <span>Litecoin (LTC)</span>
             </div>
 
             {/* Subtotal */}

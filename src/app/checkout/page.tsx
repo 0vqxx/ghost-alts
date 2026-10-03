@@ -80,15 +80,6 @@ function CheckoutContent() {
       priceUsd: 70,
       minConfirmations: 1,
     },
-    {
-      symbol: 'BTC',
-      name: 'Bitcoin',
-      icon: '₿',
-      enabled: true,
-      addressConfigured: true,
-      priceUsd: 65000,
-      minConfirmations: 1,
-    },
   ]);
   const [selectedCrypto, setSelectedCrypto] = useState<'BTC' | 'LTC'>('LTC');
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { formatDate } from '@/lib/utils';
 import {
   Key,
@@ -50,11 +51,15 @@ export function AdminTierStockManager({
   products: ProductDTO[];
 }) {
   const [inventory, setInventory] = useState(initialInventory);
+  const [catalogProducts, setCatalogProducts] = useState(products);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterProduct, setFilterProduct] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(products[0]?.id || '');
+  const [selectedProduct, setSelectedProduct] = useState(products[0]?.id || '__new__');
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductPrice, setNewProductPrice] = useState('');
+  const [newProductEdition, setNewProductEdition] = useState('Java + Bedrock');
   const [comboText, setComboText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -106,10 +111,6 @@ export function AdminTierStockManager({
 
   const handleAddBatch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProduct) {
-      setError(`Please select an existing ${tier} product listing.`);
-      return;
-    }
     setError('');
     setLoading(true);
 
@@ -120,23 +121,55 @@ export function AdminTierStockManager({
         .filter(Boolean);
 
       if (lines.length === 0) {
-        setError('Please paste at least one credential combo line.');
-        setLoading(false);
-        return;
+        throw new Error('Please paste at least one credential combo line.');
+      }
+
+      let productId = selectedProduct;
+      let createdDraft = false;
+      if (selectedProduct === '__new__') {
+        const finalName = newProductName.trim() || `${tier} Minecraft Account`;
+        const finalPrice = Number(newProductPrice) > 0 ? Number(newProductPrice) : tier === 'MCFA' ? 24.99 : 4.99;
+
+        const productResponse = await fetch('/api/admin/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: finalName,
+            type: tier,
+            edition: newProductEdition,
+            price: finalPrice,
+            description: `Official ${tier} Minecraft account listing. Instant digital fulfillment.`,
+          }),
+        });
+        const productData = await productResponse.json();
+        if (!productResponse.ok || !productData.product?.id) {
+          throw new Error(productData.error || 'Could not create the listing draft.');
+        }
+
+        productId = productData.product.id;
+        createdDraft = true;
+        setCatalogProducts((prev) => [{
+          id: productId,
+          name: productData.product.name,
+          type: tier,
+          edition: productData.product.edition,
+          price: productData.product.price,
+        }, ...prev]);
+        setSelectedProduct(productId);
       }
 
       const res = await fetch('/api/admin/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productId: selectedProduct,
+          productId,
           credentialsList: lines,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to add inventory');
+        throw new Error(`${createdDraft ? 'Draft created, but stock upload failed. Retry with the new listing selected. ' : ''}${data.error || 'Failed to add inventory'}`);
       }
 
       const formatted = data.items.map((item: any) => ({
@@ -155,8 +188,10 @@ export function AdminTierStockManager({
       setInventory((prev) => [...formatted, ...prev]);
       setIsModalOpen(false);
       setComboText('');
-      setSuccessMsg(`Successfully uploaded ${formatted.length} ${tier} account credentials into the database!`);
-      setTimeout(() => setSuccessMsg(''), 4000);
+      setNewProductName('');
+      setNewProductPrice('');
+      setSuccessMsg(`Uploaded ${formatted.length} ${tier} account${formatted.length === 1 ? '' : 's'}. Review the listing and activate it in Catalog Listings when ready.`);
+      setTimeout(() => setSuccessMsg(''), 9000);
     } catch (err: any) {
       setError(err.message || 'An error occurred');
     } finally {
@@ -270,6 +305,7 @@ export function AdminTierStockManager({
         <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
           <span>{successMsg}</span>
+          <Link href="/admin/products" className="ml-auto underline underline-offset-2 whitespace-nowrap">Catalog Listings</Link>
         </div>
       )}
 
@@ -301,8 +337,8 @@ export function AdminTierStockManager({
           onChange={(e) => setFilterProduct(e.target.value)}
           className="w-full px-3 py-2 rounded-lg bg-black/60 border border-white/[0.08] text-xs text-white focus:outline-none focus:border-[#737bea]/60 cursor-pointer"
         >
-          <option value="ALL">All Products ({products.length})</option>
-          {products.map((p) => (
+          <option value="ALL">All Products ({catalogProducts.length})</option>
+          {catalogProducts.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} (${p.price.toFixed(2)})
             </option>
@@ -452,13 +488,57 @@ export function AdminTierStockManager({
                   onChange={(e) => setSelectedProduct(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-black/60 border border-white/[0.08] text-xs text-white focus:outline-none focus:border-[#737bea]/60 cursor-pointer"
                 >
-                  {products.map((p) => (
+                  <option value="__new__">+ Create a new {tier} listing draft</option>
+                  {catalogProducts.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} (${p.price.toFixed(2)})
                     </option>
                   ))}
                 </select>
               </div>
+
+              {selectedProduct === '__new__' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-[#737bea]/20 bg-[#737bea]/[0.06] p-3.5">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1.5">Listing name</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={100}
+                      value={newProductName}
+                      onChange={(e) => setNewProductName(e.target.value)}
+                      placeholder={`${tier} Minecraft account`}
+                      className="w-full px-3 py-2 rounded-lg bg-black/60 border border-white/[0.08] text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#737bea]/60"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1.5">Price (USD)</label>
+                    <input
+                      type="number"
+                      required
+                      min="0.01"
+                      step="0.01"
+                      value={newProductPrice}
+                      onChange={(e) => setNewProductPrice(e.target.value)}
+                      placeholder="9.99"
+                      className="w-full px-3 py-2 rounded-lg bg-black/60 border border-white/[0.08] text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#737bea]/60"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1.5">Edition</label>
+                    <select
+                      value={newProductEdition}
+                      onChange={(e) => setNewProductEdition(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-black/60 border border-white/[0.08] text-xs text-white focus:outline-none focus:border-[#737bea]/60"
+                    >
+                      <option>Java + Bedrock</option>
+                      <option>Java</option>
+                      <option>Bedrock</option>
+                    </select>
+                  </div>
+                  <p className="sm:col-span-2 text-[11px] text-white/50">The listing stays hidden until you review its details and activate it in Catalog Listings.</p>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">

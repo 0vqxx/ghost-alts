@@ -228,8 +228,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const credentials = `${poolDrop.email}:${poolDrop.password}`;
-    const token: string | null = poolDrop.token || null;
+    const isTokenOnly = poolDrop.password === 'TOKEN_AUTH_ONLY' || (Boolean(poolDrop.token) && !poolDrop.password);
+    const credentials = isTokenOnly ? (poolDrop.token || poolDrop.email) : `${poolDrop.email}:${poolDrop.password}`;
+    const token: string | null = poolDrop.token || (isTokenOnly ? poolDrop.email : null);
 
     await db.freeAccountDrop.update({
       where: { id: poolDrop.id },
@@ -277,6 +278,7 @@ export async function POST(request: NextRequest) {
       success: true,
       credentials,
       token,
+      isTokenOnly,
       claimType: isAdReward ? 'ADS' : 'DAILY',
       claimId: claimRecord.id,
       claimedAt: claimRecord.claimedAt.toISOString(),

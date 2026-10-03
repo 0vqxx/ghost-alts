@@ -86,10 +86,6 @@ export function AdminInventoryManager({
 
   const handleAddBatch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProduct) {
-      setError('Please select a target account product.');
-      return;
-    }
     setError('');
     setLoading(true);
 
@@ -105,11 +101,32 @@ export function AdminInventoryManager({
         return;
       }
 
+      let productId = selectedProduct;
+      if (!productId || productId === '__new__') {
+        const createRes = await fetch('/api/admin/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'MCFA • Minecraft Java Account',
+            type: 'MCFA',
+            edition: 'Java + Bedrock',
+            price: 24.99,
+            description: 'Full Access Minecraft account. Instant digital fulfillment.',
+          }),
+        });
+        const createData = await createRes.json();
+        if (!createRes.ok || !createData.product?.id) {
+          throw new Error(createData.error || 'Failed to auto-create listing for inventory');
+        }
+        productId = createData.product.id;
+        setSelectedProduct(productId);
+      }
+
       const res = await fetch('/api/admin/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productId: selectedProduct,
+          productId,
           credentialsList: lines,
         }),
       });
@@ -363,6 +380,7 @@ export function AdminInventoryManager({
                   onChange={(e) => setSelectedProduct(e.target.value)}
                   className="w-full bg-black/60 border border-white/[0.08] text-white px-3 py-2 rounded-lg focus:outline-none focus:border-[#737bea]/60 cursor-pointer"
                 >
+                  <option value="__new__">+ Create a new MCFA listing draft</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.type} - {p.edition})

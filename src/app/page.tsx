@@ -128,10 +128,10 @@ export default async function Home() {
           <div className="bg-white/[0.03] border border-white/10 rounded-xl px-5 py-5 text-left hover:border-white/20 transition-all">
             <div className="text-[#968bf7] text-[11px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
               <Coins size={14} className="text-[#737bea]" />
-              LTC &amp; BTC CHECKOUT
+              LTC (LITECOIN) CHECKOUT
             </div>
             <div className="text-white/60 text-sm leading-relaxed">
-              Pay in Litecoin or Bitcoin. Fast on-chain confirmations unlock credentials in seconds.
+              Pay in Litecoin with low network fees. Fast on-chain confirmations unlock credentials in seconds.
             </div>
           </div>
 

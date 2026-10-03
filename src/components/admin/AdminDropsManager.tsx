@@ -53,6 +53,7 @@ export function AdminDropsManager() {
   const [error, setError] = useState('');
 
   // Single form state
+  const [singleDropType, setSingleDropType] = useState<'combo' | 'token'>('combo');
   const [singleEmail, setSingleEmail] = useState('');
   const [singlePass, setSinglePass] = useState('');
   const [singleToken, setSingleToken] = useState('');
@@ -61,6 +62,7 @@ export function AdminDropsManager() {
   const [singleScheduleDate, setSingleScheduleDate] = useState('');
 
   // Bulk form state
+  const [bulkFormat, setBulkFormat] = useState<'combo' | 'token'>('combo');
   const [bulkText, setBulkText] = useState('');
   const [intervalMinutes, setIntervalMinutes] = useState('30');
   const [startDelayMinutes, setStartDelayMinutes] = useState('0');
@@ -151,36 +153,59 @@ export function AdminDropsManager() {
     try {
       let payload: any = {};
       if (importMode === 'single') {
-        if (!singleEmail || !singlePass) {
-          setError('Email and password are required');
-          setSaving(false);
-          return;
+        if (singleDropType === 'token') {
+          if (!singleToken.trim()) {
+            setError('Minecraft auth token is required');
+            setSaving(false);
+            return;
+          }
+          payload = {
+            mode: 'single',
+            dropType: 'token',
+            singleAccount: {
+              token: singleToken.trim(),
+              isTokenOnly: true,
+              skinUsername: singleSkin || 'Steve',
+              scheduledFor:
+                singleScheduleType === 'scheduled' && singleScheduleDate
+                  ? new Date(singleScheduleDate).toISOString()
+                  : new Date().toISOString(),
+            },
+          };
+        } else {
+          if (!singleEmail.trim() || !singlePass.trim()) {
+            setError('Email and password are required');
+            setSaving(false);
+            return;
+          }
+          payload = {
+            mode: 'single',
+            dropType: 'combo',
+            singleAccount: {
+              email: singleEmail.trim(),
+              password: singlePass.trim(),
+              token: singleToken.trim() || null,
+              skinUsername: singleSkin || 'Steve',
+              scheduledFor:
+                singleScheduleType === 'scheduled' && singleScheduleDate
+                  ? new Date(singleScheduleDate).toISOString()
+                  : new Date().toISOString(),
+            },
+          };
         }
-        payload = {
-          mode: 'single',
-          singleAccount: {
-            email: singleEmail,
-            password: singlePass,
-            token: singleToken || null,
-            skinUsername: singleSkin || 'Steve',
-            scheduledFor:
-              singleScheduleType === 'scheduled' && singleScheduleDate
-                ? new Date(singleScheduleDate).toISOString()
-                : new Date().toISOString(),
-          },
-        };
       } else {
         const lines = bulkText
           .split('\n')
           .map((l) => l.trim())
           .filter(Boolean);
         if (lines.length === 0) {
-          setError('Please paste at least one account combo');
+          setError('Please paste at least one account or token');
           setSaving(false);
           return;
         }
         payload = {
           mode: 'bulk',
+          bulkFormat,
           bulkText,
           scheduleIntervalMinutes: Number(intervalMinutes) || 0,
           startDelayMinutes: Number(startDelayMinutes) || 0,
@@ -547,20 +572,50 @@ export function AdminDropsManager() {
             <form onSubmit={handleSave} className="space-y-4 text-xs">
               {importMode === 'bulk' ? (
                 <>
+                  {/* Bulk Format Selector */}
+                  <div className="flex items-center gap-2 p-1 bg-[#07090e] rounded-xl border border-white/[0.08]">
+                    <button
+                      type="button"
+                      onClick={() => setBulkFormat('combo')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                        bulkFormat === 'combo'
+                          ? 'bg-[#5a61e2] text-white shadow-sm'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      Combos (email:pass)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkFormat('token')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                        bulkFormat === 'token'
+                          ? 'bg-[#5a61e2] text-white shadow-sm'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      Token-Only (1 per line)
+                    </button>
+                  </div>
+
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-[11px] font-semibold text-white/60 uppercase block">
-                        Account Combos (<span className="text-[#968bf7]">email:pass</span> or <span className="text-[#968bf7]">email:pass:token</span>)
+                        {bulkFormat === 'token' ? 'Launcher Tokens (1 per line)' : 'Account Combos (email:pass or email:pass:token)'}
                       </label>
                       <span className="text-[11px] text-[#968bf7] font-mono">
-                        {bulkParsedCount} accounts detected
+                        {bulkParsedCount} {bulkFormat === 'token' ? 'tokens' : 'accounts'} detected
                       </span>
                     </div>
                     <textarea
                       rows={6}
                       value={bulkText}
                       onChange={(e) => setBulkText(e.target.value)}
-                      placeholder={`steve_drop1@gmail.com:Pass123!:mc_token_abc123\nalex_drop2@outlook.com:Pass456#\nmc_player3@proton.me:Secret789!:jwt_auth_tok_xyz`}
+                      placeholder={
+                        bulkFormat === 'token'
+                          ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\nmc_session_token_1234567890\neyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+                          : 'steve_drop1@gmail.com:Pass123!:mc_token_abc123\nalex_drop2@outlook.com:Pass456#\nmc_player3@proton.me:Secret789!'
+                      }
                       className="w-full bg-[#07090e] border border-white/[0.08] text-white p-3 rounded-xl focus:outline-none focus:border-[#5a61e2] font-mono text-xs placeholder-white/30 leading-relaxed"
                     />
                   </div>
@@ -605,41 +660,85 @@ export function AdminDropsManager() {
                 </>
               ) : (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">Email Address</label>
-                      <input
-                        type="email"
-                        required
-                        value={singleEmail}
-                        onChange={(e) => setSingleEmail(e.target.value)}
-                        className="w-full bg-[#07090e] border border-white/[0.08] text-white p-2 rounded-lg focus:outline-none focus:border-[#5a61e2]"
-                        placeholder="account@domain.com"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">Password</label>
-                      <input
-                        type="text"
-                        required
-                        value={singlePass}
-                        onChange={(e) => setSinglePass(e.target.value)}
-                        className="w-full bg-[#07090e] border border-white/[0.08] text-white p-2 rounded-lg focus:outline-none focus:border-[#5a61e2]"
-                        placeholder="Password123!"
-                      />
-                    </div>
+                  {/* Single Drop Type Selector */}
+                  <div className="flex items-center gap-2 p-1 bg-[#07090e] rounded-xl border border-white/[0.08]">
+                    <button
+                      type="button"
+                      onClick={() => setSingleDropType('combo')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                        singleDropType === 'combo'
+                          ? 'bg-[#5a61e2] text-white shadow-sm'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      Account Combo (Email:Pass)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSingleDropType('token')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                        singleDropType === 'token'
+                          ? 'bg-[#5a61e2] text-white shadow-sm'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      Token-Only (Launcher Auth)
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">Minecraft Token (Optional)</label>
-                    <input
-                      type="text"
-                      value={singleToken}
-                      onChange={(e) => setSingleToken(e.target.value)}
-                      className="w-full bg-[#07090e] border border-white/[0.08] text-white p-2 rounded-lg focus:outline-none focus:border-[#5a61e2] font-mono"
-                      placeholder="mc_auth_tok_eyJhbGciOi..."
-                    />
-                  </div>
+                  {singleDropType === 'token' ? (
+                    <div>
+                      <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">
+                        Minecraft Auth Token (Required)
+                      </label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={singleToken}
+                        onChange={(e) => setSingleToken(e.target.value)}
+                        className="w-full bg-[#07090e] border border-white/[0.08] text-white p-2.5 rounded-lg focus:outline-none focus:border-[#5a61e2] font-mono text-xs placeholder-white/30"
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">Email Address</label>
+                          <input
+                            type="email"
+                            required
+                            value={singleEmail}
+                            onChange={(e) => setSingleEmail(e.target.value)}
+                            className="w-full bg-[#07090e] border border-white/[0.08] text-white p-2 rounded-lg focus:outline-none focus:border-[#5a61e2]"
+                            placeholder="account@domain.com"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">Password</label>
+                          <input
+                            type="text"
+                            required
+                            value={singlePass}
+                            onChange={(e) => setSinglePass(e.target.value)}
+                            className="w-full bg-[#07090e] border border-white/[0.08] text-white p-2 rounded-lg focus:outline-none focus:border-[#5a61e2]"
+                            placeholder="Password123!"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">Minecraft Token (Optional)</label>
+                        <input
+                          type="text"
+                          value={singleToken}
+                          onChange={(e) => setSingleToken(e.target.value)}
+                          className="w-full bg-[#07090e] border border-white/[0.08] text-white p-2 rounded-lg focus:outline-none focus:border-[#5a61e2] font-mono"
+                          placeholder="mc_auth_tok_eyJhbGciOi..."
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

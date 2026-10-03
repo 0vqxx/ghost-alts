@@ -69,14 +69,22 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { mode, singleAccount, bulkText, scheduleIntervalMinutes, startDelayMinutes } = body;
+    const { mode, dropType, singleAccount, bulkText, bulkFormat, scheduleIntervalMinutes, startDelayMinutes } = body;
 
     const now = new Date();
 
     if (mode === 'single') {
-      const { email, password, token, skinUsername, scheduledFor } = singleAccount || {};
-      if (!email || !password) {
-        return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
+      const { email, password, token, skinUsername, scheduledFor, isTokenOnly } = singleAccount || {};
+      const isToken = isTokenOnly || dropType === 'token' || (!password && Boolean(token));
+
+      if (isToken) {
+        if (!token || !token.trim()) {
+          return NextResponse.json({ error: 'Auth token is required for token-only drops' }, { status: 400 });
+        }
+      } else {
+        if (!email || !password) {
+          return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
+        }
       }
 
       const releaseDate = scheduledFor ? new Date(scheduledFor) : now;
@@ -84,8 +92,8 @@ export async function POST(request: NextRequest) {
 
       const created = await db.freeAccountDrop.create({
         data: {
-          email: email.trim(),
-          password: password.trim(),
+          email: isToken ? (email?.trim() || `token-${Math.random().toString(36).substring(2, 8)}@free.ghostalts.shop`) : email.trim(),
+          password: isToken ? 'TOKEN_AUTH_ONLY' : password.trim(),
           token: token ? token.trim() : null,
           skinUsername: skinUsername ? skinUsername.trim() : 'Steve',
           status: isQueued ? 'QUEUED' : 'ACTIVE',
@@ -112,24 +120,35 @@ export async function POST(request: NextRequest) {
 
       const intervalMins = Number(scheduleIntervalMinutes) || 0;
       const initialDelayMins = Number(startDelayMinutes) || 0;
+      const isTokenFormat = bulkFormat === 'token' || dropType === 'token';
 
       const itemsToCreate = lines.map((line, index) => {
-        // Parse email:pass:token or email:pass or json
         let email = '';
         let password = '';
-        let token = null;
+        let token: string | null = null;
 
-        const parts = line.split(':');
-        if (parts.length >= 3) {
-          email = parts[0].trim();
-          password = parts[1].trim();
-          token = parts.slice(2).join(':').trim();
-        } else if (parts.length === 2) {
-          email = parts[0].trim();
-          password = parts[1].trim();
+        if (isTokenFormat) {
+          email = `token-${Math.random().toString(36).substring(2, 8)}@free.ghostalts.shop`;
+          password = 'TOKEN_AUTH_ONLY';
+          token = line.trim();
         } else {
-          email = line.trim();
-          password = 'DefaultPassword123';
+          const parts = line.split(':');
+          if (parts.length >= 3) {
+            email = parts[0].trim();
+            password = parts[1].trim();
+            token = parts.slice(2).join(':').trim();
+          } else if (parts.length === 2) {
+            email = parts[0].trim();
+            password = parts[1].trim();
+          } else if (line.length > 40 && !line.includes('@')) {
+            // Raw token detected
+            email = `token-${Math.random().toString(36).substring(2, 8)}@free.ghostalts.shop`;
+            password = 'TOKEN_AUTH_ONLY';
+            token = line.trim();
+          } else {
+            email = line.trim();
+            password = 'DefaultPassword123';
+          }
         }
 
         let releaseDate = new Date(now.getTime() + initialDelayMins * 60 * 1000);
@@ -149,9 +168,17 @@ export async function POST(request: NextRequest) {
         };
       });
 
-      await db.freeAccountDrop.createMany({
-        data: itemsToCreate,
-      });
+      // Try createMany, fall back to individual creates if needed
+      try {
+        await db.freeAccountDrop.createMany({
+          data: itemsToCreate,
+        });
+      } catch (insertErr) {
+        console.warn('[drops] createMany failed, inserting sequentially:', insertErr);
+        for (const item of itemsToCreate) {
+          await db.freeAccountDrop.create({ data: item });
+        }
+      }
 
       return NextResponse.json({
         success: true,
