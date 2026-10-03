@@ -18,37 +18,27 @@ import {
 export const dynamic = 'force-dynamic';
 
 export default async function AdminOverviewPage() {
-  const readOrEmpty = <T,>(query: Promise<T[]>): Promise<T[]> =>
-    withDbTimeout(query, [] as T[], 2500);
-  const [orders, products, users, inventory, drops, tickets] = await Promise.all([
-    readOrEmpty(db.order.findMany({
+  const [orders, availableInventory, openTicketsCount] = await Promise.all([
+    withDbTimeout(db.order.findMany({
         include: {
           items: { include: { product: true } },
         },
         orderBy: { createdAt: 'desc' },
-      })),
-    readOrEmpty(db.product.findMany({
-        include: {
-          inventoryItems: true,
-        },
-      })),
-    readOrEmpty(db.user.findMany()),
-    readOrEmpty(db.inventoryItem.findMany()),
-    readOrEmpty(db.freeAccountDrop.findMany()),
-    readOrEmpty(db.supportTicket.findMany({ where: { status: 'OPEN' } })),
+      }), [], 3000),
+    withDbTimeout(db.inventoryItem.count({ where: { status: 'AVAILABLE' } }), 0, 3000),
+    withDbTimeout(db.supportTicket.count({ where: { status: 'OPEN' } }), 0, 3000),
   ]);
 
-  const totalRevenue = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+  const paidOrders = orders.filter((order) =>
+    order.paymentStatus === 'paid' || ['DELIVERED', 'COMPLETED'].includes(order.status)
+  );
+  const totalRevenue = paidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
   const totalOrders = orders.length;
-  const availableInventory = inventory.filter((i) => i.status === 'AVAILABLE').length;
-  const activeDropsCount = drops.filter((d) => d.status === 'ACTIVE').length;
-  const queuedDropsCount = drops.filter((d) => d.status === 'QUEUED').length;
-  const openTicketsCount = tickets.length;
 
   let mcfaRevenue = 0;
   let nfaRevenue = 0;
 
-  for (const order of orders) {
+  for (const order of paidOrders) {
     for (const item of order.items) {
       if (item.product?.type === 'MCFA') {
         mcfaRevenue += item.price * item.quantity;
