@@ -56,27 +56,35 @@ const noopClient = new Proxy(
 );
 
 function runtimeDatabaseUrl(): string | undefined {
-  return process.env.DATABASE_URL || process.env.DIRECT_URL;
+  const raw = process.env.DATABASE_URL || process.env.DIRECT_URL;
+  if (!raw) return undefined;
+
+  try {
+    const url = new URL(raw);
+    // Supabase direct endpoint (db.<project>.supabase.co) is IPv6-only.
+    // In Cloudflare Workers, route to Supabase IPv4 shared pooler.
+    if (url.hostname.includes('supabase.co') && url.hostname.startsWith('db.')) {
+      const projectRef = url.hostname.split('.')[1] || 'cpnjimdnftbgvwykdqdw';
+      url.hostname = 'aws-0-us-west-2.pooler.supabase.com';
+      url.username = `postgres.${projectRef}`;
+      url.port = '5432';
+      return url.toString();
+    }
+    return raw;
+  } catch {
+    return raw;
+  }
 }
 
-let lastFailTime = 0;
-const RETRY_AFTER_FAIL_MS = 10000; // Allow retry after 10s if initialization failed
-
 function loadPrisma(): Promise<any | null> {
+  if (globalForPrisma._prismaLoadFailed) return Promise.resolve(null);
   if (globalForPrisma._prismaClient) return Promise.resolve(globalForPrisma._prismaClient);
-
-  const now = Date.now();
-  if (globalForPrisma._prismaLoadFailed && now - lastFailTime < RETRY_AFTER_FAIL_MS) {
-    return Promise.resolve(null);
-  }
-
   if (globalForPrisma._prismaLoadPromise) return globalForPrisma._prismaLoadPromise;
 
   const url = runtimeDatabaseUrl();
   if (!url) {
     console.warn('[db] DATABASE_URL not set — running in no-op DB mode');
     globalForPrisma._prismaLoadFailed = true;
-    lastFailTime = now;
     return Promise.resolve(null);
   }
 
@@ -92,8 +100,9 @@ function loadPrisma(): Promise<any | null> {
       ]);
       const pool = new Pool({
         connectionString: url,
-        max: 5,
-        connectionTimeoutMillis: 10000,
+        max: 1,
+        maxUses: 1,
+        connectionTimeoutMillis: 2500,
       });
       const adapter = new PrismaPg(pool);
       const client = new PrismaClient({
@@ -101,13 +110,10 @@ function loadPrisma(): Promise<any | null> {
         log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
       });
       globalForPrisma._prismaClient = client;
-      globalForPrisma._prismaLoadFailed = false;
       return client;
     } catch (err) {
       console.error('[db] Failed to initialize PrismaClient:', err);
       globalForPrisma._prismaLoadFailed = true;
-      lastFailTime = Date.now();
-      globalForPrisma._prismaLoadPromise = undefined;
       return null;
     }
   })();
