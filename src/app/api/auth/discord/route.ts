@@ -1,11 +1,18 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getDiscordRedirectUri } from '@/lib/auth';
+import { getDiscordRedirectUri, getSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
-  const next = requestUrl.searchParams.get('next') || requestUrl.searchParams.get('redirect') || '/dashboard';
+  const requestedNext = requestUrl.searchParams.get('next') || requestUrl.searchParams.get('redirect') || '/dashboard';
+  const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/dashboard';
+
+  // A valid site session should never trigger a second Discord consent flow.
+  const session = await getSession();
+  if (session) {
+    return NextResponse.redirect(new URL(next, requestUrl.origin));
+  }
   
   const clientId = process.env.DISCORD_CLIENT_ID || '1552159927022129162';
   

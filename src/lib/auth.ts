@@ -197,7 +197,9 @@ export async function getSession(): Promise<SessionUser | null> {
           return null;
         };
 
-        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 600));
+        // 600ms frequently expired before a cold Supabase/DB lookup finished,
+        // making an existing login appear signed out on API requests.
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
         const res = await Promise.race([checkSupabase(), timeout]);
         if (res) return res;
       }

@@ -6,22 +6,23 @@ const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 Hours
 const MAX_DAILY_ADS = 3; // Max 3 ad claims per 24 hours
 
 export async function GET(request: NextRequest) {
-  try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({
-        authenticated: false,
-        canClaimDaily: false,
-        canClaimAd: false,
-        canClaim: false,
-        dailyRemainingSeconds: 0,
-        adClaimsToday: 0,
-        adClaimsMax: MAX_DAILY_ADS,
-        adClaimsRemaining: MAX_DAILY_ADS,
-        message: 'Must be logged in with Discord to claim free accounts.',
-      });
-    }
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({
+      authenticated: false,
+      canClaimDaily: false,
+      canClaimAd: false,
+      canClaim: false,
+      dailyRemainingSeconds: 0,
+      adClaimsToday: 0,
+      adClaimsMax: MAX_DAILY_ADS,
+      adClaimsRemaining: MAX_DAILY_ADS,
+      activeDropCount: 0,
+      message: 'Sign in with Discord to claim a free account.',
+    });
+  }
 
+  try {
     let user = await db.user.findFirst({
       where: {
         OR: [{ id: session.id }, { email: session.email.toLowerCase() }],
@@ -72,7 +73,6 @@ export async function GET(request: NextRequest) {
     });
 
     const adClaimsRemaining = Math.max(0, MAX_DAILY_ADS - adClaimsToday);
-    const canClaimAd = adClaimsRemaining > 0;
 
     // Check pool availability
     const now = new Date();
@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
     const activeDropCount = await db.freeAccountDrop.count({
       where: { status: 'ACTIVE' },
     });
+    const hasStock = activeDropCount > 0;
 
     return NextResponse.json({
       authenticated: true,
@@ -98,9 +99,9 @@ export async function GET(request: NextRequest) {
         email: user.email,
         role: user.role,
       },
-      canClaimDaily,
-      canClaimAd,
-      canClaim: canClaimDaily || canClaimAd,
+      canClaimDaily: canClaimDaily && hasStock,
+      canClaimAd: adClaimsRemaining > 0 && hasStock,
+      canClaim: (canClaimDaily || adClaimsRemaining > 0) && hasStock,
       remainingSeconds: dailyRemainingSeconds,
       dailyRemainingSeconds,
       adClaimsToday,
@@ -111,8 +112,16 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || 'Failed to check status' },
-      { status: 500 }
+      {
+        authenticated: true,
+        user: session,
+        canClaimDaily: false,
+        canClaimAd: false,
+        canClaim: false,
+        activeDropCount: 0,
+        error: 'Claims are temporarily unavailable. Your sign-in is still active.',
+      },
+      { status: 503 }
     );
   }
 }
@@ -212,63 +221,25 @@ export async function POST(request: NextRequest) {
       orderBy: { scheduledFor: 'asc' },
     });
 
-    let credentials = '';
-    let token: string | null = null;
-
-    if (poolDrop) {
-      credentials = `${poolDrop.email}:${poolDrop.password}`;
-      token = poolDrop.token || null;
-
-      await db.freeAccountDrop.update({
-        where: { id: poolDrop.id },
-        data: {
-          status: 'CLAIMED',
-          claimedAt: now,
-          claimedById: user.id,
-          claimType: isAdReward ? 'ADS' : 'DAILY',
-        },
-      });
-    } else {
-      // 2. Try to get available NFA account from inventory
-      const nfaInventory = await db.inventoryItem.findFirst({
-        where: {
-          status: 'AVAILABLE',
-          product: { type: 'NFA' },
-        },
-        include: { product: true },
-      });
-
-      if (nfaInventory) {
-        credentials = nfaInventory.sensitiveCredentialsMasked;
-        token = null;
-
-        await db.inventoryItem.update({
-          where: { id: nfaInventory.id },
-          data: {
-            status: 'SOLD',
-            soldAt: now,
-          },
-        });
-
-        // Update product stock count
-        const totalAvail = await db.inventoryItem.count({
-          where: { productId: nfaInventory.productId, status: 'AVAILABLE' },
-        });
-        await db.product.update({
-          where: { id: nfaInventory.productId },
-          data: { stockCount: totalAvail },
-        });
-      } else {
-        // Drop pool is empty
-        return NextResponse.json(
-          {
-            error:
-              'No accounts currently available in the drop pool. Please wait for the admin to queue new drops or check back shortly.',
-          },
-          { status: 503 }
-        );
-      }
+    if (!poolDrop) {
+      return NextResponse.json(
+        { error: 'No free accounts are in stock yet. Please check back after the next drop.' },
+        { status: 503 }
+      );
     }
+
+    const credentials = `${poolDrop.email}:${poolDrop.password}`;
+    const token: string | null = poolDrop.token || null;
+
+    await db.freeAccountDrop.update({
+      where: { id: poolDrop.id },
+      data: {
+        status: 'CLAIMED',
+        claimedAt: now,
+        claimedById: user.id,
+        claimType: isAdReward ? 'ADS' : 'DAILY',
+      },
+    });
 
     const ipAddress = request.headers.get('x-forwarded-for') || null;
 

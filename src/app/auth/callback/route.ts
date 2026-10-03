@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   if (stateParam) {
     try {
       const decoded = JSON.parse(Buffer.from(stateParam, 'base64').toString('utf8'));
-      if (decoded?.next) next = decoded.next;
+      if (typeof decoded?.next === 'string' && decoded.next.startsWith('/') && !decoded.next.startsWith('//')) next = decoded.next;
       if (decoded?.redirectUri) stateRedirectUri = decoded.redirectUri;
     } catch {}
   }
@@ -38,7 +38,12 @@ export async function GET(request: NextRequest) {
     // 1. Try direct Discord OAuth2 token exchange first
     try {
       const clientId = process.env.DISCORD_CLIENT_ID || '1552159927022129162';
-      const clientSecret = process.env.DISCORD_CLIENT_SECRET || process.env.DISCORD_BOT_TOKEN || 'Yy5i6Qi7zvUpQuDIHWS91OfBT-eXJkLX';
+      const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+      if (!clientSecret) {
+        return NextResponse.redirect(
+          new URL('/login?error=Discord%20sign-in%20is%20not%20configured.', requestUrl.origin)
+        );
+      }
       const redirectUri = stateRedirectUri || getDiscordRedirectUri(requestUrl.origin);
 
       const tokenParams = new URLSearchParams({
@@ -69,21 +74,25 @@ export async function GET(request: NextRequest) {
           const isAdmin = isDiscordAdmin(discordId);
           const role = isAdmin ? 'ADMIN' : 'USER';
 
-          const dbUser = await db.user.upsert({
-            where: { email },
-            update: {
-              username: username.substring(0, 32),
-              discordId,
-              role,
-            },
-            create: {
-              email,
-              username: username.substring(0, 32),
-              discordId,
-              passwordHash: '',
-              role,
-            },
-          });
+          let dbUser = null;
+          for (let attempt = 0; attempt < 2 && !dbUser; attempt++) {
+            dbUser = await db.user.upsert({
+              where: { email },
+              update: { discordId, role },
+              create: {
+                email,
+                username: `${username.slice(0, 24)}-${discordId.slice(-6)}`,
+                discordId,
+                passwordHash: '',
+                role,
+              },
+            });
+          }
+          if (!dbUser) {
+            return NextResponse.redirect(
+              new URL(`/login?error=${encodeURIComponent('Account database is temporarily unavailable. Please try again.')}`, requestUrl.origin)
+            );
+          }
 
           const discordAvatar = dcUser.avatar
             ? `https://cdn.discordapp.com/avatars/${discordId}/${dcUser.avatar}.${dcUser.avatar.startsWith('a_') ? 'gif' : 'png'}?size=128`
@@ -92,7 +101,7 @@ export async function GET(request: NextRequest) {
           const token = signSessionToken({
             id: dbUser.id,
             email: dbUser.email,
-            username: dbUser.username,
+            username,
             role: dbUser.role as 'USER' | 'ADMIN',
             discordId,
             discordAvatar,
@@ -115,6 +124,9 @@ export async function GET(request: NextRequest) {
           return response;
         } else {
           console.error('[Direct Discord Auth] Failed to fetch @me user with access token');
+          return NextResponse.redirect(
+            new URL(`/login?error=${encodeURIComponent('Discord could not verify your account. Please try again.')}`, requestUrl.origin)
+          );
         }
       } else {
         const errText = await discordTokenRes.text();
@@ -132,6 +144,11 @@ export async function GET(request: NextRequest) {
       }
     } catch (dcErr) {
       console.warn('[Direct Discord Auth] Token exchange attempt failed, trying Supabase fallback:', dcErr);
+      if (stateRedirectUri) {
+        return NextResponse.redirect(
+          new URL(`/login?error=${encodeURIComponent('Discord sign-in was interrupted. Please try again.')}`, requestUrl.origin)
+        );
+      }
     }
 
     // 2. Fallback to Supabase Auth exchange

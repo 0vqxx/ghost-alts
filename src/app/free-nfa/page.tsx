@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { createClient } from '@/utils/supabase/client';
 import { SkinViewer } from '@/components/minecraft/SkinViewer';
 import {
   Gift,
@@ -41,6 +40,8 @@ export default function FreeNfaPage() {
   const [adClaimsMax, setAdClaimsMax] = useState(3);
   const [adClaimsRemaining, setAdClaimsRemaining] = useState(3);
   const [canClaimAd, setCanClaimAd] = useState(true);
+  const [activeDropCount, setActiveDropCount] = useState(0);
+  const [stockKnown, setStockKnown] = useState(false);
 
   const [claiming, setClaiming] = useState(false);
   const [newlyClaimed, setNewlyClaimed] = useState<{
@@ -66,9 +67,9 @@ export default function FreeNfaPage() {
   const fetchStatus = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/free-nfa/claim');
+      const res = await fetch('/api/free-nfa/claim', { cache: 'no-store' });
       const data = await res.json();
-      if (res.ok && data.authenticated) {
+      if (data.authenticated) {
         setAuthenticated(true);
         setUser(data.user);
         setCanClaimDaily(Boolean(data.canClaimDaily));
@@ -78,12 +79,36 @@ export default function FreeNfaPage() {
         setAdClaimsRemaining(data.adClaimsRemaining ?? Math.max(0, 3 - (data.adClaimsToday || 0)));
         setCanClaimAd(Boolean(data.canClaimAd));
         setLastClaim(data.lastClaim || null);
-      } else {
+        setActiveDropCount(data.activeDropCount || 0);
+        setStockKnown(res.ok);
+        setError(res.ok ? '' : data.error || 'Claims are temporarily unavailable.');
+      } else if (res.ok && data.authenticated === false) {
         setAuthenticated(false);
         setUser(null);
+        setStockKnown(false);
+        setError('');
+      } else {
+        throw new Error('Claim status unavailable');
       }
     } catch {
-      setAuthenticated(false);
+      // A claim-status outage must not be mistaken for a signed-out session.
+      try {
+        const sessionResponse = await fetch('/api/auth/me', { cache: 'no-store' });
+        if (sessionResponse.ok) {
+          const sessionData = await sessionResponse.json();
+          setAuthenticated(true);
+          setUser(sessionData.user);
+          setCanClaimDaily(false);
+          setCanClaimAd(false);
+          setActiveDropCount(0);
+          setStockKnown(false);
+          setError('Claims are temporarily unavailable. Your sign-in is still active.');
+        } else {
+          setAuthenticated(false);
+        }
+      } catch {
+        setError('Could not check your sign-in right now. Please refresh this page.');
+      }
     } finally {
       setLoading(false);
     }
@@ -91,15 +116,6 @@ export default function FreeNfaPage() {
 
   useEffect(() => {
     fetchStatus();
-    try {
-      const supabase = createClient();
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange(() => {
-        fetchStatus();
-      });
-      return () => subscription?.unsubscribe();
-    } catch {}
   }, []);
 
   // Daily Cooldown countdown timer
@@ -108,14 +124,14 @@ export default function FreeNfaPage() {
     const interval = setInterval(() => {
       setDailyRemainingSeconds((prev) => {
         if (prev <= 1) {
-          setCanClaimDaily(true);
+          setCanClaimDaily(stockKnown && activeDropCount > 0);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [dailyRemainingSeconds]);
+  }, [dailyRemainingSeconds, stockKnown, activeDropCount]);
 
   // Single Ad Timer countdown (5 seconds verification)
   useEffect(() => {
@@ -158,14 +174,18 @@ export default function FreeNfaPage() {
         claimType: data.claimType,
       });
 
+      const remainingStock = Math.max(0, activeDropCount - 1);
+      setActiveDropCount(remainingStock);
+
       if (type === 'DAILY') {
         setCanClaimDaily(false);
         setDailyRemainingSeconds(24 * 60 * 60);
       } else {
         setAdClaimsToday(data.adClaimsToday ?? adClaimsToday + 1);
         setAdClaimsRemaining(data.adClaimsRemaining ?? Math.max(0, adClaimsRemaining - 1));
-        setCanClaimAd((data.adClaimsRemaining ?? adClaimsRemaining - 1) > 0);
+        setCanClaimAd(remainingStock > 0 && (data.adClaimsRemaining ?? adClaimsRemaining - 1) > 0);
       }
+      if (remainingStock === 0) setCanClaimAd(false);
 
       setIsAdModalOpen(false);
       setAdPlaying(false);
@@ -182,8 +202,8 @@ export default function FreeNfaPage() {
       handleDiscordLogin();
       return;
     }
-    if (adClaimsRemaining <= 0) {
-      setError('Daily limit reached! You have claimed all 3 sponsor unlocks for today.');
+    if (!canClaimAd) {
+      setError(stockKnown && activeDropCount === 0 ? 'No free accounts are in stock yet.' : 'Sponsor claims are unavailable right now.');
       return;
     }
     setHasOpenedLinkvertise(false);
@@ -240,11 +260,13 @@ export default function FreeNfaPage() {
               Free Minecraft Drops
             </h1>
             <p className="text-white/55 mt-1.5 text-sm max-w-xl">
-              Claim 1 free launcher-ready Minecraft account every 24 hours, plus watch sponsor links to unlock up to 3 bonus accounts daily.
+              When free stock is available, claim one NFA account every 24 hours or unlock bonus drops through sponsor links.
             </p>
           </div>
 
-          {authenticated ? (
+          {loading ? (
+            <div className="px-4 py-2 text-xs text-white/50">Checking your session…</div>
+          ) : authenticated ? (
             <div className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/10 shrink-0">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-xs font-bold text-white">@{user?.username}</span>
@@ -283,24 +305,36 @@ export default function FreeNfaPage() {
                 </span>
                 <span
                   className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                    canClaimDaily
+                    authenticated && canClaimDaily
                       ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
                       : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
                   }`}
                 >
-                  {canClaimDaily ? 'Ready to Claim' : 'In Cooldown'}
+                  {stockKnown && activeDropCount === 0 ? 'Out of Stock' : authenticated && canClaimDaily ? 'Ready to Claim' : 'Unavailable'}
                 </span>
               </div>
 
               <div>
                 <h3 className="text-xl font-extrabold text-white">24-Hour Free Drop</h3>
                 <p className="text-xs text-white/55 mt-1 leading-relaxed">
-                  Every Ghost Alts user can claim 1 guaranteed unbanned NFA account once per 24 hours. No payment or credit card required.
+                  Claim one free NFA account per 24 hours when a verified drop is available. No payment or credit card required.
                 </p>
               </div>
 
               {/* Countdown or Status */}
-              {!canClaimDaily && dailyRemainingSeconds > 0 ? (
+              {!authenticated ? (
+                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/10 text-xs text-white/50 font-semibold">
+                  Sign in to check available free drops.
+                </div>
+              ) : stockKnown && activeDropCount === 0 ? (
+                <div className="p-4 rounded-xl bg-amber-500/[0.06] border border-amber-500/20 text-xs text-amber-300 font-semibold">
+                  No free accounts are in stock yet. Check back after the next drop.
+                </div>
+              ) : !stockKnown ? (
+                <div className="p-4 rounded-xl bg-amber-500/[0.06] border border-amber-500/20 text-xs text-amber-300 font-semibold">
+                  Free drops are temporarily unavailable. Your sign-in is still active.
+                </div>
+              ) : !canClaimDaily && dailyRemainingSeconds > 0 ? (
                 <div className="p-4 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs text-white/60">
                     <Clock size={15} className="text-amber-400" />
@@ -319,7 +353,11 @@ export default function FreeNfaPage() {
             </div>
 
             <div>
-              {!authenticated ? (
+              {loading ? (
+                <button disabled className="w-full py-3.5 rounded-xl bg-white/5 text-white/40 text-xs font-bold uppercase">
+                  Checking your session…
+                </button>
+              ) : !authenticated ? (
                 <button
                   onClick={handleDiscordLogin}
                   className="w-full py-3.5 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white text-xs font-extrabold uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2"
@@ -341,7 +379,7 @@ export default function FreeNfaPage() {
                       <span>Claim Free Account Now</span>
                     </>
                   ) : (
-                    <span>Cooldown Active</span>
+                    <span>{stockKnown && activeDropCount === 0 ? 'No Free Stock Yet' : !stockKnown ? 'Temporarily Unavailable' : 'Cooldown Active'}</span>
                   )}
                 </button>
               )}
@@ -356,7 +394,7 @@ export default function FreeNfaPage() {
                   Tier 2: Bonus Sponsor Drops
                 </span>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-purple-500/15 border-purple-500/30 text-purple-300">
-                  {adClaimsRemaining} / {adClaimsMax} Available
+                  {adClaimsRemaining} / {adClaimsMax} Daily Unlocks Left
                 </span>
               </div>
 
@@ -385,7 +423,11 @@ export default function FreeNfaPage() {
             </div>
 
             <div>
-              {!authenticated ? (
+              {loading ? (
+                <button disabled className="w-full py-3.5 rounded-xl bg-white/5 text-white/40 text-xs font-bold uppercase">
+                  Checking your session…
+                </button>
+              ) : !authenticated ? (
                 <button
                   onClick={handleDiscordLogin}
                   className="w-full py-3.5 rounded-xl bg-[#5865F2] hover:bg-[#4752c4] text-white text-xs font-extrabold uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2"
@@ -395,13 +437,13 @@ export default function FreeNfaPage() {
                 </button>
               ) : (
                 <button
-                  disabled={adClaimsRemaining <= 0 || claiming}
+                  disabled={!canClaimAd || claiming}
                   onClick={startAdFlow}
                   className="w-full py-3.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 disabled:opacity-40 text-white text-xs font-extrabold uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
                 >
                   <Tv size={14} className="text-[#968bf7]" />
                   <span>
-                    {adClaimsRemaining > 0 ? 'Watch Sponsor & Unlock Account' : 'Daily Limit Reached'}
+                    {stockKnown && activeDropCount === 0 ? 'No Free Stock Yet' : !stockKnown ? 'Temporarily Unavailable' : adClaimsRemaining > 0 ? 'Watch Sponsor & Unlock Account' : 'Daily Limit Reached'}
                   </span>
                 </button>
               )}
