@@ -56,9 +56,8 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
   const [hypixelBanFilter, setHypixelBanFilter] = useState('All');
   const [donutBanFilter, setDonutBanFilter] = useState('All');
 
-  // Quick Sell States (Product X, Stock X, Price $X)
+  // New listings stay private drafts until real inventory is uploaded.
   const [quickName, setQuickName] = useState('');
-  const [quickStock, setQuickStock] = useState('10');
   const [quickPrice, setQuickPrice] = useState('9.99');
   const [quickType, setQuickType] = useState<'MCFA' | 'NFA'>('MCFA');
   const [quickSkin, setQuickSkin] = useState('Steve');
@@ -82,7 +81,6 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
   const [hypixelBanned, setHypixelBanned] = useState(false);
   const [donutBanned, setDonutBanned] = useState(false);
   const [emailDomain, setEmailDomain] = useState('None (NFA)');
-  const [stockCount, setStockCount] = useState('10');
   const [badge, setBadge] = useState('');
 
   // Bulk Upload State
@@ -91,12 +89,11 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
 
   const openQuickSellModal = () => {
     setQuickName('');
-    setQuickStock('10');
     setQuickPrice('2.99');
     setQuickType('NFA');
     setQuickSkin('Steve');
     setQuickBlurName(false);
-    setQuickBatchText(`Product: Clean NFA Launcher Key\nStock: 50\nPrice: $2.49\n---\nProduct: NFA Ranked Account\nStock: 25\nPrice: $4.99`);
+    setQuickBatchText('');
     setQuickMode('single');
     setError('');
     setIsQuickSellModalOpen(true);
@@ -119,7 +116,6 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
     setHypixelBanned(false);
     setDonutBanned(false);
     setEmailDomain('None (NFA)');
-    setStockCount('10');
     setBadge('');
     setError('');
     setIsModalOpen(true);
@@ -143,7 +139,6 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
     setHypixelBanned(Boolean(p.hypixelBanned));
     setDonutBanned(Boolean(p.donutBanned));
     setEmailDomain(p.emailDomain || 'None (NFA)');
-    setStockCount(String(p.stockCount || 10));
     setBadge(p.badge || '');
     setError('');
     setIsModalOpen(true);
@@ -195,7 +190,6 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
           throw new Error('Product name is required');
         }
         const cleanPrice = parseFloat(quickPrice.replace('$', '').trim()) || 9.99;
-        const cleanStock = parseInt(quickStock) || 1;
 
         const res = await fetch('/api/admin/products', {
           method: 'POST',
@@ -204,7 +198,6 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
             name: quickName.trim(),
             type: quickType,
             price: cleanPrice,
-            stockCount: cleanStock,
             skinUsername: quickSkin.trim() || 'Steve',
             blurName: quickBlurName,
             edition: 'Java + Bedrock',
@@ -225,17 +218,16 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
 
         setProducts((prev) => [formatted, ...prev]);
         setIsQuickSellModalOpen(false);
-        setSuccessMsg(`Successfully listed "${quickName}" with ${cleanStock} in stock for $${cleanPrice.toFixed(2)}!`);
+        setSuccessMsg(`Draft created for "${quickName}". Upload real stock, then activate it.`);
         setTimeout(() => setSuccessMsg(''), 4000);
       } else {
-        // Parse Batch Syntax: Product X \n Stock: X \n Price: $X \n Blur: true/false
+        // Parse batch listing drafts; quantity alone must never create stock.
         const chunks = quickBatchText.split(/---|\n\n+/);
         const parsedItems: any[] = [];
 
         for (const chunk of chunks) {
           const lines = chunk.split('\n').map((l) => l.trim()).filter(Boolean);
           let pName = '';
-          let pStock = 10;
           let pPrice = 9.99;
           let pType = 'MCFA';
           let pBlur = false;
@@ -244,8 +236,6 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
             const lower = line.toLowerCase();
             if (lower.startsWith('product:')) {
               pName = line.replace(/product:/i, '').trim();
-            } else if (lower.startsWith('stock:')) {
-              pStock = parseInt(line.replace(/stock:/i, '').trim()) || 10;
             } else if (lower.startsWith('price:')) {
               pPrice = parseFloat(line.replace(/price:/i, '').replace('$', '').trim()) || 9.99;
             } else if (lower.startsWith('type:')) {
@@ -258,7 +248,6 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
           if (pName) {
             parsedItems.push({
               name: pName,
-              stockCount: pStock,
               price: pPrice,
               type: pType,
               skinUsername: 'Steve',
@@ -268,7 +257,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
         }
 
         if (parsedItems.length === 0) {
-          throw new Error('No valid products detected in text. Use format: Product: X, Stock: X, Price: $X');
+          throw new Error('No valid products detected. Use Product: X and Price: $X.');
         }
 
         const res = await fetch('/api/admin/products/bulk', {
@@ -290,7 +279,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
 
         setProducts((prev) => [...formatted, ...prev]);
         setIsQuickSellModalOpen(false);
-        setSuccessMsg(`Successfully listed ${formatted.length} products for sale!`);
+        setSuccessMsg(`Created ${formatted.length} drafts. Upload real stock, then activate them.`);
         setTimeout(() => setSuccessMsg(''), 4000);
       }
     } catch (err: any) {
@@ -325,7 +314,6 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
       hypixelBanned,
       donutBanned,
       emailDomain,
-      stockCount: parseInt(stockCount) || 10,
       hasEmailAccess: type === 'MCFA',
       acceptedCryptos: JSON.stringify(acceptedCryptos),
     };
@@ -367,7 +355,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
           capes: JSON.parse(data.product.capes || '[]'),
         };
         setProducts((prev) => [formatted, ...prev]);
-        setSuccessMsg(`Successfully created "${data.product.name}"`);
+        setSuccessMsg(`Draft created for "${data.product.name}". Upload real stock, then activate it.`);
       }
 
       setIsModalOpen(false);
@@ -390,57 +378,25 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
 
     for (const line of lines) {
       const parts = line.split(':');
-      if (parts.length >= 3) {
+      if (parts.length >= 4 && ['MCFA', 'NFA'].includes(parts[2].toUpperCase()) && Number(parts[3]) > 0) {
         const ign = parts[0];
         const rank = parts[1] || 'None';
         const type = parts[2].toUpperCase() === 'NFA' ? 'NFA' : 'MCFA';
-        const price = parseFloat(parts[3]) || (type === 'MCFA' ? 24.99 : 6.5);
+        const price = Number(parts[3]);
         const capes = parts[4] ? parts[4].split(',').map((c) => c.trim()) : [];
         const donutMoney = parts[5] || '$0';
 
         parsed.push({
           skinUsername: ign,
-          name: `${type} • [${rank}] • ${ign}`,
+          name: `${type} • ${rank !== 'None' ? `[${rank}] • ` : ''}${ign}`,
           type,
           price,
           rank,
           capes,
           donutMoney,
-          donutRank: 'Overlord',
-          hypixelBanned: false,
-          donutBanned: false,
-          stockCount: 5,
-        });
-      } else if (parts.length === 2 && parts[0].includes('@')) {
-        const username = parts[0].split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
-        parsed.push({
-          skinUsername: username || 'Player',
-          name: `MCFA • ${username}`,
-          type: 'MCFA',
-          price: 24.99,
-          rank: 'MVP+',
-          capes: ['Vanilla Cape'],
-          donutMoney: '$10M',
           donutRank: 'Default',
           hypixelBanned: false,
           donutBanned: false,
-          combo: line,
-          stockCount: 1,
-        });
-      } else {
-        const ign = line.trim();
-        parsed.push({
-          skinUsername: ign,
-          name: `MCFA • [MVP+] • ${ign}`,
-          type: 'MCFA',
-          price: 24.99,
-          rank: 'MVP+',
-          capes: ['Pancake Cape', 'Vanilla Cape'],
-          donutMoney: '$25M',
-          donutRank: 'Overlord',
-          hypixelBanned: false,
-          donutBanned: false,
-          stockCount: 5,
         });
       }
     }
@@ -477,7 +433,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
       setIsBulkModalOpen(false);
       setBulkText('');
       setBulkParsed([]);
-      setSuccessMsg(`Successfully uploaded ${formatted.length} accounts!`);
+      setSuccessMsg(`Created ${formatted.length} listing drafts. Upload real stock before activation.`);
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err: any) {
       setError(err.message || 'Error during bulk upload');
@@ -729,10 +685,10 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white font-mono uppercase">
-                    Quick Sell Listing
+                    Create Listing Draft
                   </h3>
                   <p className="text-[11px] text-white/40">
-                    Fast-publish accounts for sale with minimal required fields.
+                    Listings stay hidden until real account credentials are uploaded and you activate them.
                   </p>
                 </div>
               </div>
@@ -790,22 +746,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">
-                        Stock (Quantity)
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        min="1"
-                        placeholder="10"
-                        value={quickStock}
-                        onChange={(e) => setQuickStock(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-[#07090e] border border-white/[0.08] text-xs text-white font-mono focus:outline-none focus:border-[#5a61e2]"
-                      />
-                    </div>
-
+                  <div>
                     <div>
                       <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">
                         Price ($ USD)
@@ -867,14 +808,14 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-semibold text-white/60 uppercase block">
-                      Paste Products (Syntax: Product X, Stock X, Price $X)
+                      Paste Drafts (Product: X, Price: $X)
                     </label>
                   </div>
                   <textarea
                     rows={7}
                     value={quickBatchText}
                     onChange={(e) => setQuickBatchText(e.target.value)}
-                    placeholder={`Product: Diamond MCFA\nStock: 10\nPrice: $19.99\n---\nProduct: Hypixel NFA\nStock: 50\nPrice: $2.50`}
+                    placeholder={`Product: Diamond MCFA\nPrice: $19.99\n---\nProduct: Hypixel NFA\nPrice: $2.50`}
                     className="w-full p-3 rounded-lg bg-[#07090e] border border-white/[0.08] text-xs font-mono text-white placeholder-white/30 focus:outline-none focus:border-[#5a61e2] leading-relaxed"
                   />
                   <p className="text-[11px] text-white/40">
@@ -897,7 +838,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                   className="px-5 py-2 rounded-lg bg-[#5a61e2] hover:bg-[#6b72e8] disabled:opacity-50 text-white text-xs font-medium transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
                 >
                   <Zap size={14} />
-                  <span>{loading ? 'Listing Product...' : 'List for Sale'}</span>
+                  <span>{loading ? 'Creating Draft...' : 'Create Draft'}</span>
                 </button>
               </div>
             </form>
@@ -950,7 +891,7 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">
                     Tier
@@ -974,18 +915,6 @@ export function AdminProductManager({ initialProducts }: { initialProducts: Prod
                     required
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-[#07090e] border border-white/[0.08] text-xs text-white font-mono focus:outline-none focus:border-[#5a61e2]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-white/60 uppercase block mb-1">
-                    Stock Count
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    value={stockCount}
-                    onChange={(e) => setStockCount(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg bg-[#07090e] border border-white/[0.08] text-xs text-white font-mono focus:outline-none focus:border-[#5a61e2]"
                   />
                 </div>

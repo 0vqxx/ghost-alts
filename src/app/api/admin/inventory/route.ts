@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   try {
     await requireAdmin();
     const body = await request.json();
-    const { productId, count, credentialsList } = body;
+    const { productId, credentialsList } = body;
 
     if (!productId) {
       return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
@@ -17,36 +17,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
 
-    let addedCount = 0;
+    const credentials = Array.isArray(credentialsList)
+      ? credentialsList.filter((cred: unknown): cred is string =>
+          typeof cred === 'string' && Boolean(cred.trim()) && !cred.includes('@ghostvault.internal')
+        ).map((cred: string) => cred.trim())
+      : [];
 
-    if (Array.isArray(credentialsList) && credentialsList.length > 0) {
-      // Admin provided actual account credentials / combos
-      for (const cred of credentialsList) {
-        const cleanCred = (cred || '').trim();
-        if (cleanCred) {
-          await db.inventoryItem.create({
-            data: {
-              productId: product.id,
-              sensitiveCredentialsMasked: cleanCred,
-              status: 'AVAILABLE',
-            },
-          });
-          addedCount++;
-        }
-      }
-    } else {
-      // Auto-generated synthetic secure keys
-      const itemsToAdd = Math.min(100, Math.max(1, parseInt(count) || 5));
-      for (let i = 0; i < itemsToAdd; i++) {
-        await db.inventoryItem.create({
-          data: {
-            productId: product.id,
-            sensitiveCredentialsMasked: `GA-${product.type}-${Math.random().toString(36).substring(2, 8).toUpperCase()}:${Math.random().toString(36).substring(2, 10)}@ghostvault.internal`,
-            status: 'AVAILABLE',
-          },
-        });
-        addedCount++;
-      }
+    if (credentials.length === 0) {
+      return NextResponse.json(
+        { error: 'Add real account credentials before making stock available.' },
+        { status: 400 }
+      );
+    }
+
+    const createdItems = [];
+    for (const credential of credentials) {
+      const created = await db.inventoryItem.create({
+        data: {
+          productId: product.id,
+          sensitiveCredentialsMasked: credential,
+          status: 'AVAILABLE',
+        },
+      });
+      createdItems.push(created);
     }
 
     // Update product stock count
@@ -61,8 +54,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      added: addedCount,
+      added: credentials.length,
       currentStock: totalAvail,
+      items: createdItems.map((item) => ({
+        ...item,
+        product: { name: product.name, type: product.type, edition: product.edition },
+      })),
     });
   } catch (error: any) {
     return NextResponse.json(

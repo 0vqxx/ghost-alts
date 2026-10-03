@@ -110,7 +110,7 @@ export function AdminInventoryManager({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productId: selectedProduct,
-          combos: lines,
+          credentialsList: lines,
         }),
       });
 
@@ -127,7 +127,7 @@ export function AdminInventoryManager({
         edition: item.product?.edition || 'Java + Bedrock',
         status: item.status,
         orderNumber: null,
-        addedAt: item.createdAt,
+        addedAt: item.addedAt,
         soldAt: null,
         maskedCredentials: item.sensitiveCredentialsMasked,
       }));

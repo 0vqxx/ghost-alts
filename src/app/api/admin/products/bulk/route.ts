@@ -27,6 +27,14 @@ export async function POST(request: Request) {
       const name = item.name || `${type} • ${rank ? `[${rank}] • ` : ''}${skinUsername}`;
 
       const capes = Array.isArray(item.capes) ? item.capes : [];
+      const rawCredentials = Array.isArray(item.credentialsList)
+        ? item.credentialsList
+        : [item.credential || item.combo];
+      const credentials = rawCredentials
+        .filter((value: unknown): value is string =>
+          typeof value === 'string' && Boolean(value.trim()) && !value.includes('@ghostvault.internal')
+        )
+        .map((value: string) => value.trim());
 
       const autoSlug =
         (item.slug || name)
@@ -77,7 +85,7 @@ export async function POST(request: Request) {
           hasCape: capes.length > 0,
           badge: item.badge || null,
           blurName: Boolean(item.blurName),
-          active: true,
+          active: credentials.length > 0,
           skinUsername,
           capes: JSON.stringify(capes),
           rank,
@@ -97,34 +105,19 @@ export async function POST(request: Request) {
           banStatus: item.hypixelBanned ? 'Hypixel Banned' : 'Hypixel Unbanned',
           hypixelBanned: Boolean(item.hypixelBanned),
           donutBanned: Boolean(item.donutBanned),
-          stockCount: parseInt(item.stockCount) || 5,
+          stockCount: credentials.length,
         },
       });
 
-      // If credentials or combo provided, create inventory item
-      const credential = item.credential || item.combo;
-      if (credential) {
+      // Never turn a quantity-only listing into synthetic stock.
+      for (const credential of credentials) {
         await db.inventoryItem.create({
           data: {
             productId: product.id,
-            sensitiveCredentialsMasked: credential.trim(),
+            sensitiveCredentialsMasked: credential,
             status: 'AVAILABLE',
           },
         });
-      } else {
-        // Create default available keys
-        for (let i = 0; i < (parseInt(item.stockCount) || 5); i++) {
-          await db.inventoryItem.create({
-            data: {
-              productId: product.id,
-              sensitiveCredentialsMasked: `GA-${type}-${Math.random()
-                .toString(36)
-                .substring(2, 8)
-                .toUpperCase()}:${Math.random().toString(36).substring(2, 10)}@ghostvault.internal`,
-              status: 'AVAILABLE',
-            },
-          });
-        }
       }
 
       createdList.push(product);

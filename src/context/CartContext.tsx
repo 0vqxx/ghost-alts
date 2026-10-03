@@ -19,7 +19,7 @@ interface CartContextType {
   discountPercent: number;
   discountAmount: number;
   total: number;
-  applyDiscountCode: (code: string) => { success: boolean; message: string };
+  applyDiscountCode: (code: string) => Promise<{ success: boolean; message: string }>;
   removeDiscountCode: () => void;
 }
 
@@ -36,15 +36,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const savedCart = localStorage.getItem('ghostalts_cart');
-      const savedCode = localStorage.getItem('ghostalts_discount');
       if (savedCart) {
         setItems(JSON.parse(savedCart));
       }
-      if (savedCode) {
-        const parsed = JSON.parse(savedCode);
-        setDiscountCode(parsed.code);
-        setDiscountPercent(parsed.percent);
-      }
+      // Previously saved demo coupons must not appear as valid after cleanup.
+      localStorage.removeItem('ghostalts_discount');
     } catch {
       // ignore parsing errors
     } finally {
@@ -117,17 +113,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const applyDiscountCode = (code: string) => {
+  const applyDiscountCode = async (code: string) => {
     const cleanCode = code.trim().toUpperCase();
-    if (cleanCode === 'GHOST10') {
-      setDiscountCode('GHOST10');
-      setDiscountPercent(10);
-      return { success: true, message: 'Promo code applied: 10% OFF' };
-    }
-    if (cleanCode === 'WELCOME15') {
-      setDiscountCode('WELCOME15');
-      setDiscountPercent(15);
-      return { success: true, message: 'Welcome code applied: 15% OFF' };
+    try {
+      const response = await fetch(`/api/discount/validate?code=${encodeURIComponent(cleanCode)}`);
+      if (!response.ok) throw new Error('Discount validation unavailable');
+      const result = await response.json();
+      if (result.valid) {
+        setDiscountCode(result.code);
+        setDiscountPercent(result.percentage);
+        return { success: true, message: `Promo code applied: ${result.percentage}% OFF` };
+      }
+    } catch {
+      return { success: false, message: 'Could not validate discount code' };
     }
     return { success: false, message: 'Invalid or expired coupon code' };
   };

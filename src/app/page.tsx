@@ -73,7 +73,7 @@ export default async function Home() {
 
             {/* Subtitle */}
             <p className="text-white/55 text-base sm:text-lg max-w-xl mx-auto lg:mx-0 mb-8 leading-relaxed font-sans">
-              Valued marketplace for both sellers &amp; clients — instant delivery of accounts and payment. Clients receive the account as soon as it&apos;s purchased; sellers receive their payment automatically within 60 minutes.
+              Browse available Minecraft accounts and view your purchases from one dashboard. Listings appear here only when real account stock is ready for delivery.
             </p>
 
             {/* CTAs */}
@@ -203,7 +203,7 @@ export default async function Home() {
               </div>
               <h3 className="text-lg font-bold text-white mb-1">Restocking Accounts</h3>
               <p className="text-white/40 text-sm max-w-md mx-auto">
-                All currently listed accounts are either sold or undergoing verification. Join our Discord to get notified as soon as a new batch drops!
+                No accounts are listed right now. Join our Discord to hear when verified stock is added.
               </p>
               <div className="mt-5">
                 <a

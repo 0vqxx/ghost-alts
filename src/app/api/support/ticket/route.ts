@@ -86,29 +86,10 @@ export async function POST(request: Request) {
         });
         userId = guestUser.id;
       } catch {
-        // Mock fallback if DB is offline
-        const fallbackTicketNumber = generateTicketNumber();
-        return NextResponse.json({
-          success: true,
-          ticket: {
-            id: 'mock-ticket-' + Date.now(),
-            ticketNumber: fallbackTicketNumber,
-            category,
-            subject,
-            message,
-            status: 'OPEN',
-            createdAt: new Date().toISOString(),
-            messages: [
-              {
-                id: 'msg-1',
-                senderName,
-                senderRole: 'USER',
-                message,
-                createdAt: new Date().toISOString(),
-              },
-            ],
-          },
-        });
+        return NextResponse.json(
+          { error: 'Support is temporarily unavailable. Your ticket was not saved; please try again.' },
+          { status: 503 }
+        );
       }
     }
 

@@ -8,8 +8,7 @@
     "pages:build": "opennextjs-cloudflare build",
     "preview": "opennextjs-cloudflare preview",
     "start": "next start",
-    "postinstall": "prisma generate && node scripts/patch-opennext.js",
-    "seed": "tsx prisma/seed.ts"
+    "postinstall": "prisma generate && node scripts/patch-opennext.js"
   },
   "keywords": [
     "minecraft",

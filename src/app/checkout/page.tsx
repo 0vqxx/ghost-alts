@@ -251,13 +251,14 @@ function CheckoutContent() {
     setValidatingCode(true);
 
     try {
-      // Simulate/check discount logic
       const code = discountCode.trim().toUpperCase();
-      if (code === 'GHOST10') {
-        setAppliedDiscount({ code: 'GHOST10', percentage: 10 });
-      } else if (code === 'VIP20') {
-        setAppliedDiscount({ code: 'VIP20', percentage: 20 });
+      const response = await fetch(`/api/discount/validate?code=${encodeURIComponent(code)}`);
+      if (!response.ok) throw new Error('Discount validation unavailable');
+      const result = await response.json();
+      if (result.valid) {
+        setAppliedDiscount({ code: result.code, percentage: result.percentage });
       } else {
+        setAppliedDiscount(null);
         setDiscountError('Invalid or expired discount code');
       }
     } catch {

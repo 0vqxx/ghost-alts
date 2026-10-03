@@ -55,7 +55,6 @@ export async function POST(request: Request) {
       emailDomain,
       hypixelBanned,
       donutBanned,
-      stockCount,
     } = body;
 
     if (!name || !type || !price) {
@@ -120,7 +119,8 @@ export async function POST(request: Request) {
         hasCape: parsedCapes.length > 0 || (hasCape ?? false),
         badge: badge || null,
         blurName: Boolean(body.blurName),
-        active: true,
+        // A listing is a draft until real account credentials are uploaded.
+        active: false,
         skinUsername: skinUsername || 'Steve',
         capes: JSON.stringify(parsedCapes),
         rank: rank && rank !== 'None' ? rank : null,
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
         banStatus: hypixelBanned ? 'Hypixel Banned' : 'Hypixel Unbanned',
         hypixelBanned: Boolean(hypixelBanned),
         donutBanned: Boolean(donutBanned),
-        stockCount: stockCount ? parseInt(stockCount) : 10,
+        stockCount: 0,
         acceptedCryptos: body.acceptedCryptos
           ? (typeof body.acceptedCryptos === 'string'
               ? body.acceptedCryptos
@@ -190,7 +190,6 @@ export async function PUT(request: Request) {
       price,
       compareAtPrice,
       active,
-      stockCount,
       badge,
       skinUsername,
       blurName,
@@ -232,7 +231,6 @@ export async function PUT(request: Request) {
     if (price !== undefined) updateData.price = parseFloat(price);
     if (compareAtPrice !== undefined) updateData.compareAtPrice = compareAtPrice ? parseFloat(compareAtPrice) : null;
     if (active !== undefined) updateData.active = Boolean(active);
-    if (stockCount !== undefined) updateData.stockCount = parseInt(stockCount);
     if (badge !== undefined) updateData.badge = badge;
     if (blurName !== undefined) updateData.blurName = Boolean(blurName);
     if (skinUsername !== undefined) updateData.skinUsername = skinUsername;
