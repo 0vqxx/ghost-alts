@@ -55,12 +55,30 @@ const noopClient = new Proxy(
   }
 );
 
+function runtimeDatabaseUrl(): string | undefined {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return undefined;
+
+  // Supabase's direct endpoint is IPv6-only on this project. Use its shared
+  // session pooler for the Worker while retaining the existing DB password.
+  // Session mode supports the prepared statements used by Prisma's pg adapter.
+  const url = new URL(raw);
+  if (url.hostname === 'db.cpnjimdnftbgvwykdqdw.supabase.co' && url.username === 'postgres') {
+    url.hostname = 'aws-0-us-west-2.pooler.supabase.com';
+    url.username = 'postgres.cpnjimdnftbgvwykdqdw';
+    url.port = '5432';
+    return url.toString();
+  }
+
+  return raw;
+}
+
 function loadPrisma(): Promise<any | null> {
   if (globalForPrisma._prismaLoadFailed) return Promise.resolve(null);
   if (globalForPrisma._prismaClient) return Promise.resolve(globalForPrisma._prismaClient);
   if (globalForPrisma._prismaLoadPromise) return globalForPrisma._prismaLoadPromise;
 
-  const url = process.env.DATABASE_URL;
+  const url = runtimeDatabaseUrl();
   if (!url) {
     console.warn('[db] DATABASE_URL not set — running in no-op DB mode');
     globalForPrisma._prismaLoadFailed = true;
@@ -97,6 +115,18 @@ function loadPrisma(): Promise<any | null> {
     }
   })();
   return globalForPrisma._prismaLoadPromise;
+}
+
+export async function isDatabaseAvailable(): Promise<boolean> {
+  const client = await loadPrisma();
+  if (!client) return false;
+  try {
+    await client.$queryRaw`SELECT 1`;
+    return true;
+  } catch (err) {
+    console.error('[db] Readiness query failed:', err);
+    return false;
+  }
 }
 
 // Async proxy — awaits Prisma lazily on each model property access
